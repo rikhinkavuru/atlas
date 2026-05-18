@@ -21,6 +21,7 @@ import { cn } from "@/lib/cn";
 import { VENUE_PRESETS, type VenueId } from "@/lib/rubrics";
 import { SubmissionForecastCard } from "./SubmissionForecast";
 import { MultiVenueForecast } from "./MultiVenueForecast";
+import { Reviewer2Panel } from "../reviewer-model/Reviewer2Panel";
 import type { AnalysisIssue, AnalysisReport } from "@/types";
 
 const SEVERITY_COLOR: Record<AnalysisIssue["severity"], string> = {
@@ -276,6 +277,7 @@ export function AnalyzerDrawer() {
           {report && report.scores.length > 0 && (
             <>
               <SubmissionForecastCard report={report} />
+              <Reviewer2Panel report={report} />
               <MultiVenueForecast report={report} />
             </>
           )}

@@ -37,6 +37,12 @@ interface VenueDef {
 
 const VENUES: VenueDef[] = [
   {
+    label: "ICLR 2024",
+    v1Invitations: ["ICLR.cc/2024/Conference/-/Submission"],
+    v2VenueId: "ICLR.cc/2024/Conference",
+    ratingScale: "1–10",
+  },
+  {
     label: "ICLR 2023",
     v1Invitations: ["ICLR.cc/2023/Conference/-/Blind_Submission"],
     ratingScale: "1–10",
@@ -47,12 +53,31 @@ const VENUES: VenueDef[] = [
     ratingScale: "1–10",
   },
   {
-    label: "ICLR 2024",
-    v1Invitations: ["ICLR.cc/2024/Conference/-/Submission"],
-    v2VenueId: "ICLR.cc/2024/Conference",
+    label: "NeurIPS 2023",
+    v1Invitations: ["NeurIPS.cc/2023/Conference/-/Submission"],
+    v2VenueId: "NeurIPS.cc/2023/Conference",
+    ratingScale: "1–10",
+  },
+  {
+    label: "NeurIPS 2022",
+    v1Invitations: ["NeurIPS.cc/2022/Conference/-/Submission"],
+    v2VenueId: "NeurIPS.cc/2022/Conference",
+    ratingScale: "1–10",
+  },
+  {
+    label: "EMNLP 2023",
+    v1Invitations: ["EMNLP/2023/Conference/-/Submission"],
+    v2VenueId: "EMNLP/2023/Conference",
+    ratingScale: "1–5",
+  },
+  {
+    label: "TMLR",
+    v1Invitations: ["TMLR/-/Submission"],
+    v2VenueId: "TMLR",
     ratingScale: "1–10",
   },
 ];
+
 
 export async function GET(req: NextRequest) {
   const limit = Math.min(

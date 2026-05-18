@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ComparisonHarness } from "@/components/reviewer-model/ComparisonHarness";
+import { CalibrationCard } from "@/components/reviewer-model/CalibrationCard";
+import { OPENREVIEW_VENUES } from "@/lib/openreview-venues";
 
 const KEY = "atlas:reviewer-model-optin";
 
@@ -128,6 +130,8 @@ export function ReviewerModelClient() {
 
       <CorpusSample />
 
+      <CalibrationCard />
+
       <ComparisonHarness />
 
       <section className="mt-16 pt-8 border-t border-border">
@@ -183,7 +187,7 @@ interface Sample {
 function CorpusSample() {
   const [samples, setSamples] = useState<Sample[] | null>(null);
   const [busy, setBusy] = useState(false);
-  const [venue, setVenue] = useState("ICLR 2023");
+  const [venue, setVenue] = useState<string>(OPENREVIEW_VENUES[0]);
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
 
@@ -243,9 +247,11 @@ function CorpusSample() {
           disabled={busy}
           className="input max-w-[160px]"
         >
-          <option>ICLR 2023</option>
-          <option>ICLR 2022</option>
-          <option>ICLR 2024</option>
+          {OPENREVIEW_VENUES.map((v) => (
+            <option key={v} value={v}>
+              {v}
+            </option>
+          ))}
         </select>
         <button
           onClick={fetchSamples}
