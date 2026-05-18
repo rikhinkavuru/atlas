@@ -131,7 +131,7 @@ const WELCOME_MESSAGE: AgentMessage = {
   id: "m_welcome",
   role: "assistant",
   content:
-    "I'm your research co-author. Highlight any text and tell me what to do — tighten it, add a citation, rewrite for a reviewer, suggest a counterargument. Or open a browser tab to validate a source and I'll pull the citation in for you.",
+    "Welcome to Atlas. I'm your AI co-author — but every action I take is signed into a hash-chained ledger your reviewers can verify.\n\nTry this on the sample paper:\n\n1. Highlight any sentence and ask me to tighten or rewrite it — I'll return a diff you accept or reject, and the change goes in the ledger.\n2. Type $E = mc^2$ anywhere to insert inline math, or press / and pick \"Math equation\" for display equations.\n3. Hit ⌘⇧A to run the Paper Critic — it grades against the venue rubric and predicts Reviewer 2's questions.\n4. When you're ready, File → Publish ledger gives reviewers a /p/<key> URL they can verify independently.\n\nThe sample paper below is from a fake AtlasRAG draft — feel free to scribble on it.",
   timestamp: Date.now(),
 };
 

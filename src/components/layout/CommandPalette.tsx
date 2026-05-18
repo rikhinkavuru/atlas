@@ -9,13 +9,22 @@ import {
   Wand2,
   Plus,
   Library,
+  ShieldCheck,
+  Sigma,
   ArrowRight,
 } from "lucide-react";
 import { useAtlas } from "@/lib/store";
 import { cn } from "@/lib/cn";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 
-type ActionGroup = "Recent" | "Workspace" | "Web" | "Agent" | "Tools";
+type ActionGroup =
+  | "Recent"
+  | "Workspace"
+  | "Web"
+  | "Agent"
+  | "Tools"
+  | "Provenance"
+  | "Editor";
 
 type Action = {
   id: string;
@@ -176,6 +185,30 @@ export function CommandPalette() {
       run: () => {
         toggle(false);
         useAtlas.getState().toggleSettings(true);
+      },
+    },
+    {
+      id: "publish-ledger",
+      title: "Publish ledger publicly",
+      desc: "Get a /p/<shareKey> URL reviewers can verify",
+      icon: <ShieldCheck className="size-4" />,
+      group: "Provenance",
+      run: () => {
+        toggle(false);
+        window.dispatchEvent(new CustomEvent("atlas:open-publish-ledger"));
+      },
+    },
+    {
+      id: "insert-math",
+      title: "Insert math equation",
+      desc: "Add an inline or display LaTeX equation",
+      icon: <Sigma className="size-4" />,
+      group: "Editor",
+      run: () => {
+        toggle(false);
+        // Reuse the slash menu's math form by simulating a slash at the
+        // current cursor: PaperEditor listens to this event and pops it open.
+        window.dispatchEvent(new CustomEvent("atlas:open-math-insert"));
       },
     },
   ];

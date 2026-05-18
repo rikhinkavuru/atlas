@@ -366,6 +366,43 @@ body {
   margin-left: 0;
 }
 
+/* Math nodes — KaTeX renders inside .tiptap .math.{math-inline,math-display}.
+   Inline math sits on the text baseline; display math gets a generous
+   margin and centers like a regular equation block. Clicking either opens
+   an inline edit popover (wired in PaperEditor). */
+.tiptap .math {
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease);
+}
+.tiptap .math:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 3px;
+}
+.tiptap .math.math-inline {
+  display: inline-block;
+  vertical-align: -0.1em;
+  padding: 0 2px;
+  margin: 0 1px;
+}
+.tiptap .math.math-display {
+  display: block;
+  margin: 1.2rem 0;
+  padding: 0.5rem 0.75rem;
+  text-align: center;
+  border-radius: 6px;
+}
+.tiptap .math.math-display:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+/* KaTeX's default font color is set via .katex which inherits — leave alone.
+   The .katex-error span gets our danger-color from errorColor in renderInto. */
+.tiptap .math .katex {
+  font-size: 1em;
+}
+.tiptap .math.math-display .katex {
+  font-size: 1.05em;
+}
+
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;

@@ -23,7 +23,7 @@ import { summariseLedger } from "@/lib/provenance";
 import type { ProvenanceEvent, ProvenanceLedger, ProvenanceSummary } from "@/types";
 import { cn } from "@/lib/cn";
 
-interface Report {
+export interface Report {
   ledger: ProvenanceLedger;
   summary: ProvenanceSummary;
 }
@@ -207,7 +207,7 @@ export function VerifyClient() {
   );
 }
 
-function ReportHeader({
+export function ReportHeader({
   report,
   copied,
   onCopy,
@@ -340,7 +340,7 @@ function Stat({
   );
 }
 
-function AuthorshipChart({ report }: { report: Report }) {
+export function AuthorshipChart({ report }: { report: Report }) {
   const b = report.summary.authorshipBreakdown;
   const total = b.author + b.ai + b.sourced + b.imported || 1;
   const seg = (n: number) => `${Math.round((n / total) * 100)}%`;
@@ -407,7 +407,7 @@ function Legend({
   );
 }
 
-function BadgeEmbed({ report }: { report: Report }) {
+export function BadgeEmbed({ report }: { report: Report }) {
   const { ledger, summary } = report;
   const params = useMemo(() => {
     const b = summary.authorshipBreakdown;
@@ -547,7 +547,7 @@ function SnippetCard({
   );
 }
 
-function ChainTimeline({ report }: { report: Report }) {
+export function ChainTimeline({ report }: { report: Report }) {
   return (
     <div className="panel rounded-xl overflow-hidden">
       <div className="px-5 py-3 border-b border-border text-[10px] uppercase tracking-[0.15em] text-subtle font-mono">

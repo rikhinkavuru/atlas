@@ -48,6 +48,14 @@ export interface ProposalSource {
   url?: string;
   doi?: string;
   origin: "library" | "verified" | "selection" | "draft";
+  /** Set when this source has been resolved against an external registry
+   *  (CrossRef / OpenAlex / Semantic Scholar / arXiv / Nia). Undefined when
+   *  the gating step hasn't run yet. */
+  verified?: boolean;
+  /** Confidence from the verifier (0–1). */
+  confidence?: number;
+  /** Provider that resolved it ("crossref" | "openalex" | ...) when verified. */
+  resolvedVia?: string;
 }
 
 export interface Source {

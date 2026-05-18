@@ -18,10 +18,12 @@ export const SAMPLE_PAPER_HTML = `
 <p>We segment each paper at three levels — section, paragraph, and sentence — and index all three. At query time we first retrieve sections, then expand the top-k to their constituent paragraphs, and finally to sentence-level evidence. This lets a downstream reader access local context without us having to commit to a single chunk size up front.</p>
 
 <h3>3.2 Query-Aware Re-Ranking</h3>
-<p>Following ColBERTv2, we use a cross-encoder re-ranker, but we condition on the query <em>and</em> a brief auto-generated summary of the candidate section. This summary nudges the re-ranker to prefer evidence that supports a coherent answer rather than incidental keyword overlap.</p>
+<p>Following ColBERTv2, we use a cross-encoder re-ranker, but we condition on the query <em>and</em> a brief auto-generated summary of the candidate section. This summary nudges the re-ranker to prefer evidence that supports a coherent answer rather than incidental keyword overlap. Concretely, the re-ranker score for a passage <span class="math math-inline" data-tex="p"></span> given query <span class="math math-inline" data-tex="q"></span> is</p>
+<div class="math math-display" data-tex="s(q, p) = \\alpha \\cdot \\mathrm{CrossEnc}(q, p) + (1 - \\alpha) \\cdot \\mathrm{Sim}(q, \\mathrm{summary}(p))"></div>
+<p>where <span class="math math-inline" data-tex="\\alpha \\in [0, 1]"></span> is tuned on a small validation set.</p>
 
 <h3>3.3 Long-Context Reader</h3>
-<p>We pass the top-k passages plus their adjacent context windows into a 1M-token reader. The reader is prompted to emit answers as a JSON list of (claim, citation) pairs, where each citation must resolve to a sentence in the retrieved evidence. We reject answers whose citations cannot be string-matched back into the context, which is a cheap but surprisingly effective hallucination check.</p>
+<p>We pass the top-k passages plus their adjacent context windows into a 1M-token reader. The reader is prompted to emit answers as a JSON list of (claim, citation) pairs, where each citation must resolve to a sentence in the retrieved evidence. We reject answers whose citations cannot be string-matched back into the context, which is a cheap but surprisingly effective hallucination check. Recall at <span class="math math-inline" data-tex="k=10"></span> over the AtlasQA validation set reaches <span class="math math-inline" data-tex="0.92"></span>.</p>
 
 <h2>4. Experiments</h2>
 <p>We evaluate on AtlasQA, a new benchmark of 4,200 questions written by domain experts across 1,600 arXiv preprints. Questions are categorised by reasoning type: factual lookup, multi-hop synthesis, numerical comparison, and methodological critique.</p>

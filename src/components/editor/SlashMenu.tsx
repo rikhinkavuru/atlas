@@ -13,10 +13,12 @@ import {
   Minus,
   BookMarked,
   Sparkles,
+  Sigma,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useAtlas } from "@/lib/store";
+import katex from "katex";
 
 type Item = {
   title: string;
@@ -26,7 +28,7 @@ type Item = {
   needsCleanup?: boolean;
   /** When set, slash-menu returns this kind to the host so it can show an
    * inline form instead of running `apply` immediately. */
-  inlineForm?: "citation";
+  inlineForm?: "citation" | "math";
 };
 
 const items: Item[] = [
@@ -96,6 +98,14 @@ const items: Item[] = [
     needsCleanup: true,
   },
   {
+    title: "Math equation",
+    desc: "Inline or display LaTeX",
+    icon: <Sigma className="size-4" />,
+    inlineForm: "math",
+    apply: () => {},
+    needsCleanup: true,
+  },
+  {
     title: "Ask the agent",
     desc: "Open the AI agent panel",
     icon: <Sparkles className="size-4" />,
@@ -114,18 +124,25 @@ export function SlashMenu({
   editor,
   slashFrom,
   onClose,
+  initialForm,
 }: {
   x: number;
   y: number;
   editor: Editor;
   slashFrom: number;
   onClose: () => void;
+  initialForm?: "math" | "citation";
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [inlineForm, setInlineForm] = useState<null | "citation">(null);
+  const [inlineForm, setInlineForm] = useState<null | "citation" | "math">(
+    initialForm ?? null,
+  );
   const [formKey, setFormKey] = useState("");
   const [formUrl, setFormUrl] = useState("");
+  const [mathTex, setMathTex] = useState("");
+  const [mathKind, setMathKind] = useState<"inline" | "display">("display");
+  const mathPreviewRef = useRef<HTMLSpanElement | null>(null);
   const ref = useRef<HTMLDivElement | null>(null);
   const formInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -210,10 +227,49 @@ export function SlashMenu({
       setInlineForm("citation");
       return;
     }
+    if (item.inlineForm === "math") {
+      cleanupSlash();
+      setInlineForm("math");
+      return;
+    }
     if (item.needsCleanup) cleanupSlash();
     item.apply(editor);
     onClose();
   }
+
+  function submitMath() {
+    const tex = mathTex.trim();
+    if (!tex) {
+      onClose();
+      return;
+    }
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: mathKind === "inline" ? "inlineMath" : "blockMath",
+        attrs: { tex },
+      })
+      .run();
+    onClose();
+  }
+
+  // Live preview as the user types LaTeX. KaTeX swallows errors silently with
+  // throwOnError:false so a half-typed `\frac{` doesn't blow up the form.
+  useEffect(() => {
+    if (inlineForm !== "math" || !mathPreviewRef.current) return;
+    try {
+      katex.render(mathTex || "\\text{Preview appears here}", mathPreviewRef.current, {
+        displayMode: mathKind === "display",
+        throwOnError: false,
+        errorColor: "var(--color-danger, #f88)",
+        strict: "ignore",
+        output: "html",
+      });
+    } catch {
+      if (mathPreviewRef.current) mathPreviewRef.current.textContent = mathTex;
+    }
+  }, [mathTex, mathKind, inlineForm]);
 
   function submitCitation() {
     const key = formKey.trim() || "ref";
@@ -226,6 +282,102 @@ export function SlashMenu({
       )
       .run();
     onClose();
+  }
+
+  if (inlineForm === "math") {
+    const clampedX =
+      typeof window !== "undefined"
+        ? Math.max(8, Math.min(x, window.innerWidth - 408))
+        : x;
+    return (
+      <div
+        ref={ref}
+        className="fixed z-30 panel shadow-2xl w-[400px] max-w-[92vw] p-3 rounded-lg overflow-hidden"
+        style={{ left: clampedX, top: y }}
+      >
+        <div className="px-1 pb-2 text-[10px] uppercase tracking-[0.15em] text-subtle flex items-center justify-between">
+          <span>Insert math equation</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cancel"
+            className="h-5 w-5 rounded flex items-center justify-center text-subtle hover:text-foreground hover:bg-surface-2"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitMath();
+          }}
+          className="space-y-2"
+        >
+          <div className="flex items-center gap-1 text-[11px]">
+            {(["display", "inline"] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setMathKind(k)}
+                className={cn(
+                  "h-6 px-2 rounded text-[10.5px] font-mono uppercase tracking-[0.12em] border",
+                  mathKind === k
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-border bg-surface text-muted hover:text-foreground",
+                )}
+              >
+                {k}
+              </button>
+            ))}
+            <span className="ml-auto text-[10px] font-mono text-subtle">
+              LaTeX
+            </span>
+          </div>
+          <textarea
+            ref={formInputRef as unknown as React.RefObject<HTMLTextAreaElement>}
+            value={mathTex}
+            onChange={(e) => setMathTex(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                onClose();
+              } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                submitMath();
+              }
+            }}
+            placeholder="\\sum_{i=1}^{n} x_i^2"
+            rows={3}
+            className="w-full bg-background border border-border rounded px-2 py-1.5 text-[12px] font-mono focus:outline-none focus:border-accent resize-none"
+          />
+          <div className="border border-border rounded bg-surface-2/40 px-3 py-2 min-h-[44px] flex items-center justify-center overflow-x-auto">
+            <span ref={mathPreviewRef} className="text-foreground" />
+          </div>
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[10px] text-subtle font-mono">
+              <span className="kbd">⌘</span>
+              <span className="kbd">↵</span> insert
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-7 px-2 rounded text-[11px] text-muted hover:text-foreground hover:bg-surface-2"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={!mathTex.trim()}
+                className="h-7 px-2 rounded text-[11px] bg-accent text-accent-fg disabled:opacity-40"
+              >
+                Insert
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    );
   }
 
   if (inlineForm === "citation") {

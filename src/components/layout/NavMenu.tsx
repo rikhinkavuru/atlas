@@ -134,6 +134,13 @@ function getMenus(): Record<string, MenuItem[]> {
       },
       { label: "", separator: true },
       {
+        label: "Publish ledger…",
+        onClick: () =>
+          window.dispatchEvent(new CustomEvent("atlas:open-publish-ledger")),
+        disabled: !paper,
+      },
+      { label: "", separator: true },
+      {
         label: "Export workspace…",
         onClick: () => downloadLab(),
       },

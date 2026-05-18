@@ -24,6 +24,7 @@ import {
 import { PdfImportZone } from "../import/PdfImportZone";
 import { WelcomeModal } from "../onboarding/WelcomeModal";
 import { NavDialogs } from "./NavDialogs";
+import { PublishLedgerDialog } from "./PublishLedgerDialog";
 import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 
@@ -176,6 +177,7 @@ function WorkspaceInner() {
       <PdfImportZone />
       <WelcomeModal />
       <NavDialogs />
+      <PublishLedgerDialog />
     </div>
   );
 }

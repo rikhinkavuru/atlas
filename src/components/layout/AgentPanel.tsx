@@ -34,6 +34,34 @@ import type {
 
 type Mode = "edit" | "ask" | "plan" | "cite";
 
+/**
+ * Fire-off helper that gates a proposal's sources through /api/verify-proposal
+ * and re-patches the assistant message with the verified version. We don't
+ * await it inline so the user sees the proposal land immediately; verified
+ * badges appear a moment later.
+ */
+async function verifyAndPatch(
+  proposal: EditProposal,
+  pendingId: string,
+  patchMessage: (id: string, patch: Partial<AgentMessage>) => void,
+) {
+  try {
+    const r = await fetch("/api/verify-proposal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ proposal }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!r.ok) return;
+    const data = (await r.json()) as { ok: boolean; proposal?: EditProposal };
+    if (data.ok && data.proposal) {
+      patchMessage(pendingId, { proposal: data.proposal });
+    }
+  } catch {
+    /* leave the un-verified proposal as-is */
+  }
+}
+
 const QUICK_PROMPTS: Record<Mode, { label: string; prompt: string }[]> = {
   edit: [
     { label: "Tighten", prompt: "Rewrite the selected text to be ~30% shorter without losing meaning. Keep the academic tone." },
@@ -187,7 +215,7 @@ export function AgentPanel() {
         try {
           const parsed = JSON.parse(part.trim());
           if (parsed?.after) {
-            patch.proposal = {
+            const initial: EditProposal = {
               id: `p_${Date.now()}`,
               before: selection?.text ?? "",
               after: parsed.after,
@@ -197,7 +225,14 @@ export function AgentPanel() {
               unsupportedClaims: Array.isArray(parsed.unsupportedClaims)
                 ? parsed.unsupportedClaims
                 : [],
-            } satisfies EditProposal;
+            };
+            patch.proposal = initial;
+
+            // Fire-and-forget verification: hit /api/verify-proposal in the
+            // background and patch the message again when each source has been
+            // resolved (or rejected) against an external registry. The user
+            // sees a verified/unverified badge per source before accepting.
+            void verifyAndPatch(initial, pendingId, patchMessage);
           }
         } catch {}
       }
@@ -874,36 +909,80 @@ function ProposalCard({
         )}
         {proposal.sources && proposal.sources.length > 0 && (
           <div className="pt-1.5 space-y-1">
-            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-subtle">
-              Supported by · {proposal.sources.length}
+            <div className="text-[10px] font-mono uppercase tracking-[0.15em] text-subtle flex items-center gap-1.5">
+              <span>Supported by · {proposal.sources.length}</span>
+              {proposal.sources.some((s) => s.verified === undefined) && (
+                <span className="flex items-center gap-1 text-info">
+                  <Loader2 className="size-2.5 animate-spin" />
+                  verifying
+                </span>
+              )}
             </div>
             <ul className="space-y-1">
-              {proposal.sources.map((s, i) => (
-                <li
-                  key={i}
-                  className="text-[10.5px] flex items-start gap-1.5 border-l-2 border-accent/40 pl-2"
-                >
-                  <ShieldCheck className="size-2.5 mt-0.5 text-accent shrink-0" />
-                  <div className="min-w-0">
-                    <div className="text-foreground font-medium">
-                      {s.label ?? s.origin ?? "source"}
-                      {s.url && (
-                        <a
-                          href={s.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="ml-1 text-accent underline underline-offset-2"
-                        >
-                          link
-                        </a>
-                      )}
+              {proposal.sources.map((s, i) => {
+                // Three states: verified (green), pending (subtle), failed (warning).
+                const state =
+                  s.verified === true
+                    ? "ok"
+                    : s.verified === false
+                      ? "fail"
+                      : "pending";
+                return (
+                  <li
+                    key={i}
+                    className={cn(
+                      "text-[10.5px] flex items-start gap-1.5 pl-2 border-l-2",
+                      state === "ok" && "border-accent/40",
+                      state === "fail" && "border-warning/40",
+                      state === "pending" && "border-border",
+                    )}
+                  >
+                    {state === "ok" ? (
+                      <ShieldCheck className="size-2.5 mt-0.5 text-accent shrink-0" />
+                    ) : state === "fail" ? (
+                      <ShieldAlert className="size-2.5 mt-0.5 text-warning shrink-0" />
+                    ) : (
+                      <CircleDashed className="size-2.5 mt-0.5 text-subtle shrink-0" />
+                    )}
+                    <div className="min-w-0">
+                      <div
+                        className={cn(
+                          "font-medium",
+                          state === "fail" ? "text-warning" : "text-foreground",
+                        )}
+                      >
+                        {s.label ?? s.origin ?? "source"}
+                        {s.url && (
+                          <a
+                            href={s.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-1 text-accent underline underline-offset-2"
+                          >
+                            link
+                          </a>
+                        )}
+                        {state === "ok" && s.resolvedVia && (
+                          <span className="ml-1.5 text-subtle font-mono text-[9.5px] uppercase tracking-[0.12em]">
+                            via {s.resolvedVia}
+                            {typeof s.confidence === "number" && (
+                              <> · {Math.round(s.confidence * 100)}%</>
+                            )}
+                          </span>
+                        )}
+                        {state === "fail" && (
+                          <span className="ml-1.5 text-warning font-mono text-[9.5px] uppercase tracking-[0.12em]">
+                            unverified
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-subtle italic truncate">
+                        &ldquo;{s.quote}&rdquo;
+                      </div>
                     </div>
-                    <div className="text-subtle italic truncate">
-                      &ldquo;{s.quote}&rdquo;
-                    </div>
-                  </div>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

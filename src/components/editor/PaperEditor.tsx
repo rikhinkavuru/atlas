@@ -29,6 +29,9 @@ import {
 } from "lucide-react";
 import { Citation, CommentMark, BindingMark, ProvenanceMark } from "./extensions";
 import { BlockProvenance } from "./block-provenance";
+import { InlineMath, BlockMath } from "./math";
+import { MathInputRules } from "./math-input-rules";
+import "katex/dist/katex.min.css";
 import { createBinding } from "@/lib/binding";
 import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
@@ -54,6 +57,8 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     y: number;
     show: boolean;
     from: number;
+    /** Optional: pre-open the slash menu directly into an inline form. */
+    initialForm?: "math" | "citation";
   } | null>(null);
 
   const editor = useEditor({
@@ -80,6 +85,11 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       BindingMark,
       ProvenanceMark,
       BlockProvenance,
+      InlineMath,
+      BlockMath,
+      // Markdown-style math input rules: $$...$$ → block, $...$ → inline.
+      // Fires when the user types the closing delimiter.
+      MathInputRules,
     ],
     content: paper?.html ?? "",
     editorProps: {
@@ -137,6 +147,36 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     return () => {
       delete (window as unknown as { __atlasEditor?: typeof editor }).__atlasEditor;
     };
+  }, [editor]);
+
+  // Command palette → math: open the slash menu's math form at the cursor.
+  useEffect(() => {
+    if (!editor) return;
+    const onMath = () => {
+      const view = editor.view;
+      const from = view.state.selection.from;
+      try {
+        const coords = view.coordsAtPos(from);
+        setSlash({
+          x: coords.left,
+          y: coords.bottom + 6,
+          show: true,
+          from,
+          initialForm: "math",
+        });
+      } catch {
+        /* selection out of view — open at viewport top-left */
+        setSlash({
+          x: 120,
+          y: 120,
+          show: true,
+          from,
+          initialForm: "math",
+        });
+      }
+    };
+    window.addEventListener("atlas:open-math-insert", onMath);
+    return () => window.removeEventListener("atlas:open-math-insert", onMath);
   }, [editor]);
 
   // editorProps.attributes is a snapshot at mount — when the user toggles
@@ -207,6 +247,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
           y={slash.y}
           editor={editor}
           slashFrom={slash.from}
+          initialForm={slash.initialForm}
           onClose={() => setSlash(null)}
         />
       )}
