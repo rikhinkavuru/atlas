@@ -1,0 +1,653 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--fg);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #38bdf8;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-serif: var(--font-instrument), "Iowan Old Style", "Palatino Linotype",
+    "Book Antiqua", Palatino, serif;
+}
+
+/* Motion tokens — one easing, three durations. Mirrors src/lib/motion.ts so
+   CSS transitions and Framer Motion share the same language. */
+:root {
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 400ms;
+  /* Shadow tokens — three steps, theme-aware via --shadow-color. */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 8px 24px -8px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 30px 80px -30px rgba(0, 0, 0, 0.45);
+}
+
+/* Dark (default) */
+:root,
+:root[data-theme="dark"] {
+  --bg: #0a0a0a;
+  --surface: #111111;
+  --surface-2: #161616;
+  --surface-3: #1c1c1c;
+  --border: #232323;
+  --border-strong: #2e2e2e;
+  --fg: #f5f5f5;
+  --muted: #a1a1a1;
+  /* WCAG AA: #8a8a8a on #0a0a0a → 6.79:1 (was #6b6b6b → 4.41:1, borderline). */
+  --subtle: #8a8a8a;
+  --accent: #c6f24e;
+  --accent-fg: #0a0a0a;
+  --accent-soft: #1e2a0c;
+  --accent-hover: #b7e23a;
+  --paper-bg: var(--bg);
+  --paper-fg: #ededed;
+  --paper-h: #fafafa;
+  --code-bg: #1c1c1c;
+  --code-border: #2a2a2a;
+  --code-fg: #e0e0e0;
+  --scroll-thumb: #232323;
+  --scroll-thumb-hover: #383838;
+  --shadow-color: 0 0% 0%;
+  color-scheme: dark;
+}
+
+/* Light */
+:root[data-theme="light"] {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --surface-3: #e7e7e9;
+  --border: #e4e4e4;
+  --border-strong: #d4d4d4;
+  --fg: #0a0a0a;
+  --muted: #404040;
+  /* WCAG AA: #6b6b6b on #fafafa → 4.83:1 (was #8a8a8a → 3.13:1, fails AA). */
+  --subtle: #6b6b6b;
+  --accent: #4d7c0f;
+  --accent-fg: #ffffff;
+  --accent-soft: #ecfccb;
+  --accent-hover: #3f6212;
+  --paper-bg: #ffffff;
+  --paper-fg: #18181b;
+  --paper-h: #0a0a0a;
+  --code-bg: #f4f4f5;
+  --code-border: #e4e4e4;
+  --code-fg: #18181b;
+  --scroll-thumb: #d4d4d4;
+  --scroll-thumb-hover: #a3a3a3;
+  --shadow-color: 220 13% 15%;
+  color-scheme: light;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  border-color: var(--border);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 4px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+}
+
+.tiptap {
+  outline: none;
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--paper-fg);
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 64px 56px 240px 56px;
+  font-family: var(--font-serif);
+}
+
+.tiptap > *:first-child {
+  margin-top: 0;
+}
+
+.tiptap h1,
+.tiptap h2,
+.tiptap h3 {
+  font-family: var(--font-sans);
+  color: var(--paper-h);
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+.tiptap h1 {
+  font-size: 2.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  margin: 2.5rem 0 1rem;
+}
+.tiptap h2 {
+  font-size: 1.75rem;
+  line-height: 1.2;
+  margin: 2rem 0 0.75rem;
+}
+.tiptap h3 {
+  font-size: 1.25rem;
+  line-height: 1.3;
+  margin: 1.5rem 0 0.5rem;
+}
+
+.tiptap p {
+  margin: 0.85em 0;
+}
+
+.tiptap a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.tiptap blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 0.25rem 0 0.25rem 1.25rem;
+  margin: 1.25rem 0;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.tiptap code {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--code-fg);
+}
+
+.tiptap pre {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 1.25rem 0;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+
+.tiptap pre code {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.tiptap ul,
+.tiptap ol {
+  padding-left: 1.5rem;
+  margin: 0.85em 0;
+}
+.tiptap ul {
+  list-style: disc;
+}
+.tiptap ol {
+  list-style: decimal;
+}
+.tiptap li > p {
+  margin: 0.25em 0;
+}
+
+.tiptap mark {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--paper-h);
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.tiptap .citation {
+  display: inline;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  padding: 0 6px;
+  border-radius: 999px;
+  font-family: var(--font-sans);
+  font-size: 0.8em;
+  vertical-align: 0.05em;
+  cursor: pointer;
+  margin: 0 1px;
+}
+
+.tiptap .comment-mark {
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--color-warning) 65%, transparent);
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.tiptap .binding-mark {
+  background: color-mix(in srgb, var(--color-info) 12%, transparent);
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-info) 65%, transparent);
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0 1px;
+  transition: background 0.15s ease;
+}
+.tiptap .binding-mark:hover {
+  background: color-mix(in srgb, var(--color-info) 24%, transparent);
+}
+.tiptap .binding-mark[data-binding-status="stale"] {
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--color-warning) 70%, transparent);
+}
+.tiptap .binding-mark[data-binding-status="missing"] {
+  background: color-mix(in srgb, var(--color-danger) 16%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--color-danger) 70%, transparent);
+}
+.tiptap .binding-mark[data-binding-status="fresh"] {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.tiptap .provenance-mark {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted color-mix(in srgb, var(--accent) 55%, transparent);
+  transition: background 0.15s ease;
+}
+.tiptap .provenance-mark:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.tiptap .provenance-mark::after {
+  content: "AI · " attr(data-prov-model) " · " attr(data-prov-sources) " sources" "\A" attr(data-prov-actor);
+  white-space: pre;
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(4px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 6px 9px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 20;
+  min-width: 180px;
+  text-align: left;
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.5);
+}
+.tiptap .provenance-mark:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+.tiptap .provenance-mark[data-prov-unsourced="0"]::after {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+/* Block-level provenance — paragraph / heading / blockquote left-border
+   colored by the dominant provenance state of the block's descendants.
+   See src/components/editor/block-provenance.ts. */
+.tiptap [data-block-prov] {
+  position: relative;
+  padding-left: 14px;
+  margin-left: -14px;
+  transition: background var(--duration-fast) var(--ease);
+}
+.tiptap [data-block-prov]::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.35em;
+  bottom: 0.35em;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background var(--duration-fast) var(--ease);
+}
+.tiptap [data-block-prov="sourced"]::before {
+  background: var(--accent);
+}
+.tiptap [data-block-prov="sourced"]:hover {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.tiptap [data-block-prov="unsourced"]::before {
+  background: var(--warning);
+}
+.tiptap [data-block-prov="unsourced"]:hover {
+  background: color-mix(in srgb, var(--warning) 5%, transparent);
+}
+.tiptap [data-block-prov="binding"]::before {
+  background: color-mix(in srgb, var(--accent) 55%, var(--border));
+}
+/* Settings toggle in Appearance — disables the visual signal without
+   removing the data attribute (preserves it for export/inspection). */
+.tiptap.no-block-prov [data-block-prov]::before {
+  display: none;
+}
+.tiptap.no-block-prov [data-block-prov] {
+  padding-left: 0;
+  margin-left: 0;
+}
+
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--subtle);
+  pointer-events: none;
+  height: 0;
+}
+
+[data-anchor] {
+  scroll-margin-top: 100px;
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--fg);
+  transition: background var(--duration-fast) var(--ease),
+    border-color var(--duration-fast) var(--ease), transform 0.05s;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+.btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.btn-icon {
+  padding: 0;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.btn-icon > svg {
+  flex-shrink: 0;
+}
+.btn-sm {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.btn-lg {
+  height: 44px;
+  padding: 0 20px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+
+.input {
+  display: block;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  transition: border-color var(--duration-fast) var(--ease),
+    box-shadow var(--duration-fast) var(--ease);
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--surface-2);
+}
+
+/* Global focus-visible ring — keyboard users see a consistent indicator on
+   every interactive element, mouse users see nothing extra. */
+.btn:focus-visible,
+.input:focus-visible,
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 6px;
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse-soft-kf {
+  0%, 100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+}
+.animate-pulse-soft {
+  animation: pulse-soft-kf 2.2s ease-in-out infinite;
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--fg) 8%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Accessibility — respect prefers-reduced-motion. Disables decorative
+   animations, marquees, and Framer transitions for users who opt out. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Reader-mode prose */
+.prose-reader {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.prose-reader h1,
+.prose-reader h2,
+.prose-reader h3,
+.prose-reader h4 {
+  font-family: var(--font-sans);
+  color: var(--fg);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 1.5rem 0 0.5rem;
+}
+.prose-reader h1 {
+  font-size: 1.8rem;
+}
+.prose-reader h2 {
+  font-size: 1.4rem;
+}
+.prose-reader h3 {
+  font-size: 1.15rem;
+}
+.prose-reader p {
+  margin: 0.75rem 0;
+}
+.prose-reader a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose-reader blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 1rem;
+  color: var(--muted);
+  font-style: italic;
+  margin: 1.25rem 0;
+}
+.prose-reader code {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.prose-reader pre {
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+}
+.prose-reader img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  margin: 1rem 0;
+}
+.prose-reader ul,
+.prose-reader ol {
+  padding-left: 1.5rem;
+  margin: 0.75rem 0;
+}
+.prose-reader ul {
+  list-style: disc;
+}
+.prose-reader ol {
+  list-style: decimal;
+}
+.prose-reader figure {
+  margin: 1.25rem 0;
+}
+.prose-reader table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.25rem 0;
+}
+.prose-reader th,
+.prose-reader td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  font-size: 0.92em;
+}

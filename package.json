@@ -1,0 +1,52 @@
+{
+  "name": "paper-atlas",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.64",
+    "@clerk/nextjs": "^7.3.5",
+    "@tiptap/extension-character-count": "^3.23.4",
+    "@tiptap/extension-highlight": "^3.23.4",
+    "@tiptap/extension-image": "^3.23.4",
+    "@tiptap/extension-link": "^3.23.4",
+    "@tiptap/extension-placeholder": "^3.23.4",
+    "@tiptap/extension-table": "^3.23.4",
+    "@tiptap/extension-table-cell": "^3.23.4",
+    "@tiptap/extension-table-header": "^3.23.4",
+    "@tiptap/extension-table-row": "^3.23.4",
+    "@tiptap/extension-task-item": "^3.23.4",
+    "@tiptap/extension-task-list": "^3.23.4",
+    "@tiptap/extension-typography": "^3.23.4",
+    "@tiptap/pm": "^3.23.4",
+    "@tiptap/react": "^3.23.4",
+    "@tiptap/starter-kit": "^3.23.4",
+    "ai": "^6.0.184",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.38.0",
+    "lucide-react": "^1.16.0",
+    "next": "16.2.6",
+    "openai": "^6.38.0",
+    "pdfjs-dist": "^5.7.284",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3",
+    "zustand": "^5.0.13"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
