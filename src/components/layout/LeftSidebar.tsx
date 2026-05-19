@@ -96,13 +96,15 @@ export function LeftSidebar() {
           label="Notes"
           badge={unresolved || undefined}
         />
-        <SidebarTab
-          active={section === "ledger"}
-          onClick={() => setSection("ledger")}
-          icon={<ShieldCheck className="size-3.5" />}
-          label="Ledger"
-          badge={ledger?.events.length || undefined}
-        />
+        <span data-tour="sidebar-ledger" className="contents">
+          <SidebarTab
+            active={section === "ledger"}
+            onClick={() => setSection("ledger")}
+            icon={<ShieldCheck className="size-3.5" />}
+            label="Ledger"
+            badge={ledger?.events.length || undefined}
+          />
+        </span>
         <SidebarTab
           active={section === "spine"}
           onClick={() => setSection("spine")}

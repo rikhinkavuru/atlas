@@ -23,6 +23,7 @@ import {
 } from "../reviewer/ReviewerStudio";
 import { PdfImportZone } from "../import/PdfImportZone";
 import { WelcomeModal } from "../onboarding/WelcomeModal";
+import { OnboardingTour } from "../onboarding/OnboardingTour";
 import { NavDialogs } from "./NavDialogs";
 import { PublishLedgerDialog } from "./PublishLedgerDialog";
 import { ReferencesDialog } from "./ReferencesDialog";
@@ -180,6 +181,7 @@ function WorkspaceInner() {
       />
       <PdfImportZone />
       <WelcomeModal />
+      <OnboardingTour />
       <NavDialogs />
       <PublishLedgerDialog />
       <ReferencesDialog />

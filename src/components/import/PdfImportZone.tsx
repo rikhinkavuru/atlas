@@ -15,6 +15,8 @@ interface ImportSummary {
   columns: 1 | 2;
   mathFragments: number;
   droppedHeaderFooter: number;
+  figuresExtracted: number;
+  figuresSkipped: number;
 }
 
 export function PdfImportZone() {
@@ -55,6 +57,8 @@ export function PdfImportZone() {
             columns: result.stats.columns,
             mathFragments: result.stats.mathFragments,
             droppedHeaderFooter: result.stats.droppedHeaderFooter,
+            figuresExtracted: result.stats.figuresExtracted,
+            figuresSkipped: result.stats.figuresSkipped,
           });
         } catch (e) {
           setError(
@@ -191,8 +195,28 @@ export function PdfImportZone() {
                 </button>
               </div>
               {(summary.mathFragments > 0 ||
-                summary.droppedHeaderFooter > 0) && (
+                summary.droppedHeaderFooter > 0 ||
+                summary.figuresExtracted > 0 ||
+                summary.figuresSkipped > 0) && (
                 <div className="text-[10.5px] text-muted leading-relaxed border-t border-border pt-2 space-y-0.5">
+                  {summary.figuresExtracted > 0 && (
+                    <div>
+                      <span className="text-accent font-mono">
+                        {summary.figuresExtracted}
+                      </span>{" "}
+                      figure{summary.figuresExtracted === 1 ? "" : "s"}{" "}
+                      extracted as inline images, appended at the end.
+                    </div>
+                  )}
+                  {summary.figuresSkipped > 0 && (
+                    <div>
+                      <span className="text-warning font-mono">
+                        {summary.figuresSkipped}
+                      </span>{" "}
+                      figure{summary.figuresSkipped === 1 ? "" : "s"}{" "}
+                      skipped (oversized or unsupported bitmap).
+                    </div>
+                  )}
                   {summary.mathFragments > 0 && (
                     <div>
                       <span className="text-warning font-mono">

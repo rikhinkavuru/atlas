@@ -70,6 +70,7 @@ export function TopBar() {
         {/* Primary actions — Analyze & Agent stay prominent */}
         <button
           onClick={toggleAnalyzer}
+          data-tour="topbar-analyze"
           className="btn btn-ghost h-7 text-xs"
           title="Analyze paper (⌘⇧A)"
         >
@@ -78,6 +79,7 @@ export function TopBar() {
         </button>
         <button
           onClick={toggleAgent}
+          data-tour="topbar-agent"
           className={cn("btn h-7 text-xs", agentOpen && "btn-primary")}
           title="Toggle agent (⌘L)"
         >
@@ -95,7 +97,9 @@ export function TopBar() {
         <PresenceChips />
 
         {/* Trust Meter — the moat status badge, anchored before utility cluster */}
-        <TrustMeter />
+        <span data-tour="topbar-trust">
+          <TrustMeter />
+        </span>
 
         {/* Single source of truth for API-key state: warning button when missing,
             otherwise just a small connected-dot tooltip on the settings icon. */}

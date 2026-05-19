@@ -54,6 +54,8 @@ export interface PdfExtractResult {
     columns: 1 | 2;
     mathFragments: number;
     droppedHeaderFooter: number;
+    figuresExtracted: number;
+    figuresSkipped: number;
   };
 }
 
@@ -77,7 +79,24 @@ interface LineRun {
   column: "left" | "right" | "full";
 }
 
-const MATH_GLYPH = /[αβγδεζηθικλμνξοπρστυφχψω∑∫∏∂∇∞≈≤≥≠±×÷√∈∉⊂⊃∪∩→←⇒⇔]/;
+// Math-glyph detector covering the unicode blocks that show up most often
+// in academic PDFs:
+//   U+0370–03FF  Greek and Coptic           (α β γ Σ Δ Ω …)
+//   U+2070–209F  Superscripts and Subscripts ( ⁰¹² ₀₁₂ )
+//   U+2100–214F  Letterlike Symbols          (ℎ ℝ ℕ ℙ ℓ ∂)
+//   U+2190–21FF  Arrows                      (← → ⇒ ⇔ ↦)
+//   U+2200–22FF  Mathematical Operators      (∀ ∃ ∈ ∉ ∑ ∏ ∫ ∞ ≈ ≤ ≥)
+//   U+27C0–27EF  Misc Mathematical Symbols-A (⟨ ⟩ ⟦ ⟧)
+//   U+2A00–2AFF  Supplemental Math Operators
+//   U+1D400–1D7FF Mathematical Alphanumeric  (𝐀 𝐁 𝐶 𝓘 𝕂)
+// Plus the conventional Latin operators (±×÷√) which are scattered.
+//
+// Why broad: PDF.js gives us only the typeset glyph stream, not source
+// LaTeX. Matching widely catches more real math; the density heuristic
+// (≥40% math glyphs in a 4+ char run with no whitespace) suppresses the
+// stray Greek letter in prose.
+const MATH_GLYPH =
+  /[Ͱ-Ͽ⁰-₟℀-⅏←-⇿∀-⋿⟀-⟯⨀-⫿\u{1D400}-\u{1D7FF}±×÷√]/u;
 const PAGE_NUM = /^(?:\d{1,3}|[ivxlcdm]+)$/i;
 
 export async function extractPdf(file: File): Promise<PdfExtractResult> {
@@ -90,6 +109,8 @@ export async function extractPdf(file: File): Promise<PdfExtractResult> {
   let columnsObserved: 1 | 2 = 1;
   let droppedHeaderFooter = 0;
   let mathFragments = 0;
+  let figuresSkipped = 0;
+  const extractedFigures: { pageIndex: number; dataUrl: string; index: number }[] = [];
   const pageLines: LineRun[][] = [];
 
   // Sample of large-font text from page 1 — used for title/author detection.
@@ -156,6 +177,54 @@ export async function extractPdf(file: File): Promise<PdfExtractResult> {
     const { lines, columns } = layoutToLines(filtered, viewport.width);
     if (columns > columnsObserved) columnsObserved = columns as 1 | 2;
     pageLines.push(lines);
+
+    // Figure extraction — walk the page's operator list, find every
+    // paintImageXObject call, retrieve the corresponding bitmap, and
+    // rasterise it to a base64 data URL. We embed inline so the imported
+    // paper is fully self-contained; large bitmaps (over a megabyte
+    // encoded) get skipped + counted to avoid bloating localStorage.
+    try {
+      const opList = await page.getOperatorList();
+      const ops = opList.fnArray;
+      const args = opList.argsArray;
+      const OPS = (pdfjs as unknown as { OPS: Record<string, number> }).OPS;
+      const PAINT_IMG = OPS?.paintImageXObject;
+      const PAINT_INLINE = OPS?.paintInlineImageXObject;
+      // Dedupe within a page — logos and watermarks paint multiple times.
+      const seenImages = new Set<string>();
+      if (PAINT_IMG != null || PAINT_INLINE != null) {
+        for (let opIdx = 0; opIdx < ops.length; opIdx++) {
+          const op = ops[opIdx];
+          if (op !== PAINT_IMG && op !== PAINT_INLINE) continue;
+          const imgName = args[opIdx]?.[0];
+          if (typeof imgName !== "string") continue;
+          if (seenImages.has(imgName)) continue;
+          seenImages.add(imgName);
+          try {
+            const img = await retrieveImage(page, imgName);
+            if (!img) {
+              figuresSkipped++;
+              continue;
+            }
+            const dataUrl = imageToDataUrl(img);
+            if (!dataUrl || dataUrl.length > 1_500_000) {
+              figuresSkipped++;
+              continue;
+            }
+            extractedFigures.push({
+              pageIndex: i,
+              dataUrl,
+              index: extractedFigures.length + 1,
+            });
+          } catch {
+            figuresSkipped++;
+          }
+        }
+      }
+    } catch {
+      // Operator list unavailable for this page — keep going, the text
+      // extraction already succeeded.
+    }
   }
 
   // Flatten + heading-classify. Median body-text size is the baseline; any
@@ -230,6 +299,20 @@ export async function extractPdf(file: File): Promise<PdfExtractResult> {
     }
   }
 
+  // Append any extracted figures at the end with a placeholder caption.
+  // We don't try to interleave them with the prose — figure-caption
+  // pairing in PDFs needs visual layout reasoning beyond what we have.
+  // Authors can drag-and-drop them into position in the editor and
+  // edit the caption to match.
+  for (const f of extractedFigures) {
+    // The Figure NodeView auto-prepends "Figure N." so the figcaption text
+    // shouldn't repeat the word "Figure" — otherwise the visible caption
+    // reads "Figure 3. Figure imported from page…".
+    bodyParts.push(
+      `<figure class="atlas-figure" data-src="${f.dataUrl}"><img src="${f.dataUrl}" alt="Imported figure"/><figcaption>Imported from page ${f.pageIndex}. Edit this caption.</figcaption></figure>`,
+    );
+  }
+
   const fullText = blocks.map((b) => b.text).join("\n\n");
   return {
     title: titleGuess || file.name.replace(/\.pdf$/i, ""),
@@ -243,8 +326,146 @@ export async function extractPdf(file: File): Promise<PdfExtractResult> {
       columns: columnsObserved,
       mathFragments,
       droppedHeaderFooter,
+      figuresExtracted: extractedFigures.length,
+      figuresSkipped,
     },
   };
+}
+
+/**
+ * Retrieve an image bitmap by name from a PDF.js page. Image objects can
+ * resolve asynchronously (PDF.js streams them), so we wrap the callback-
+ * style `objs.get(name, cb)` API in a Promise. Returns null when the image
+ * isn't available (e.g. the page didn't actually paint that XObject yet).
+ */
+async function retrieveImage(
+  page: {
+    objs: {
+      get: (name: string, cb?: (img: unknown) => void) => unknown;
+      has?: (name: string) => boolean;
+    };
+  },
+  imgName: string,
+): Promise<{
+  width: number;
+  height: number;
+  data: Uint8ClampedArray | Uint8Array;
+  kind?: number;
+} | null> {
+  return await new Promise((resolve) => {
+    let resolved = false;
+    const settle = (img: unknown) => {
+      if (resolved) return;
+      resolved = true;
+      const obj = img as {
+        width?: number;
+        height?: number;
+        data?: Uint8ClampedArray | Uint8Array;
+        kind?: number;
+      } | null;
+      if (
+        obj &&
+        typeof obj.width === "number" &&
+        typeof obj.height === "number" &&
+        obj.data
+      ) {
+        resolve({
+          width: obj.width,
+          height: obj.height,
+          data: obj.data,
+          kind: obj.kind,
+        });
+      } else {
+        resolve(null);
+      }
+    };
+    // Two-mode get: sometimes the image is already resolved (returns sync);
+    // sometimes it's pending and the callback fires later.
+    try {
+      const sync = page.objs.get(imgName, settle);
+      if (sync) settle(sync);
+    } catch {
+      settle(null);
+    }
+    // Bail out after 5s so we don't hang the import on a stuck image.
+    setTimeout(() => settle(null), 5_000);
+  });
+}
+
+/**
+ * Convert a PDF.js image bitmap to a base64 PNG data URL. PDF.js uses
+ * three kinds of image data internally:
+ *   1 = GRAYSCALE (single-channel 8-bit)
+ *   2 = RGB (3-channel)
+ *   3 = RGBA (4-channel)
+ * We normalize each to RGBA before writing to a canvas. The encoded size
+ * cap is enforced by the caller.
+ */
+function imageToDataUrl(img: {
+  width: number;
+  height: number;
+  data: Uint8ClampedArray | Uint8Array;
+  kind?: number;
+}): string | null {
+  if (typeof document === "undefined") return null;
+  const { width, height, data, kind } = img;
+  if (!width || !height) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  const imageData = ctx.createImageData(width, height);
+  const out = imageData.data;
+  const pixels = width * height;
+  // kind 1 = GRAYSCALE, kind 2 = RGB, kind 3 = RGBA (current PDF.js
+  // ImageKind enum). Older versions used GRAYSCALE_8BPP / RGB_24BPP /
+  // RGBA_32BPP — same semantics. We treat absent kind as RGBA if the
+  // buffer length matches.
+  const inputBytesPerPixel = inferBytesPerPixel(data.length, pixels, kind);
+  if (!inputBytesPerPixel) return null;
+  for (let i = 0, j = 0; i < pixels; i++) {
+    if (inputBytesPerPixel === 1) {
+      const v = data[i] ?? 0;
+      out[j++] = v;
+      out[j++] = v;
+      out[j++] = v;
+      out[j++] = 255;
+    } else if (inputBytesPerPixel === 3) {
+      out[j++] = data[i * 3] ?? 0;
+      out[j++] = data[i * 3 + 1] ?? 0;
+      out[j++] = data[i * 3 + 2] ?? 0;
+      out[j++] = 255;
+    } else if (inputBytesPerPixel === 4) {
+      out[j++] = data[i * 4] ?? 0;
+      out[j++] = data[i * 4 + 1] ?? 0;
+      out[j++] = data[i * 4 + 2] ?? 0;
+      out[j++] = data[i * 4 + 3] ?? 255;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  // PNG keeps line art crisp; JPEG could be smaller but we'd lose
+  // alpha + introduce artefacts on diagrams.
+  try {
+    return canvas.toDataURL("image/png");
+  } catch {
+    return null;
+  }
+}
+
+function inferBytesPerPixel(
+  byteLength: number,
+  pixels: number,
+  kind: number | undefined,
+): 1 | 3 | 4 | null {
+  if (kind === 1) return 1;
+  if (kind === 2) return 3;
+  if (kind === 3) return 4;
+  // No kind hint — try the buffer-length heuristic.
+  if (byteLength === pixels) return 1;
+  if (byteLength === pixels * 3) return 3;
+  if (byteLength === pixels * 4) return 4;
+  return null;
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -390,20 +611,34 @@ function mergeLines(lines: LineRun[]): string {
 }
 
 function paragraphHtml(text: string): { html: string; mathCount: number } {
-  // Wrap dense math-glyph runs in inline math placeholders. We pick runs of
-  // 4+ characters that are dominated by math glyphs (≥40%), so casual greek
-  // letters in prose don't get wrapped.
+  // Wrap dense math-glyph runs in inline math placeholders. A run is any
+  // sequence of 4+ non-whitespace characters using a math-friendly
+  // alphabet (alnum + the math unicode blocks + common math punctuation).
+  // We wrap when ≥40% of the run is dedicated math glyphs — that filters
+  // casual single-Greek-letters-in-prose ("α-helix"), while still catching
+  // mid-sentence equations like "x ≥ y² + z".
   let mathCount = 0;
-  const re = /[A-Za-z0-9αβγδεζηθικλμνξοπρστυφχψω∑∫∏∂∇∞≈≤≥≠±×÷√∈∉⊂⊃∪∩→←⇒⇔()\[\]{}+\-=^_\.\\/,]{4,}/g;
+  const re =
+    /[A-Za-z0-9Ͱ-Ͽ⁰-₟℀-⅏←-⇿∀-⋿⟀-⟯⨀-⫿\u{1D400}-\u{1D7FF}±×÷√()\[\]{}+\-=^_.\\/,]{4,}/gu;
   const escaped = escapeHtml(text);
   const wrapped = escaped.replace(re, (m) => {
-    const mathCharCount = (m.match(MATH_GLYPH) ?? []).length;
+    const mathCharCount = countMatches(m, MATH_GLYPH_GLOBAL);
     if (mathCharCount / m.length < 0.4) return m;
     if (m.split(/\s+/).length > 1) return m; // multi-word — probably prose
     mathCount++;
     return `<span class="math math-inline" data-tex="${escapeAttr(m)}"></span>`;
   });
   return { html: `<p>${wrapped}</p>`, mathCount };
+}
+
+const MATH_GLYPH_GLOBAL =
+  /[Ͱ-Ͽ⁰-₟℀-⅏←-⇿∀-⋿⟀-⟯⨀-⫿\u{1D400}-\u{1D7FF}±×÷√]/gu;
+
+function countMatches(s: string, re: RegExp): number {
+  let n = 0;
+  re.lastIndex = 0;
+  while (re.exec(s) !== null) n++;
+  return n;
 }
 
 function guessTitleFromHeader(spans: PositionedSpan[]): string {
