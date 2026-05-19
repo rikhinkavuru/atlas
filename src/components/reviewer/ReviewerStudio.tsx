@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Inbox,
@@ -481,15 +481,30 @@ export function NewReviewModal({
   open: boolean;
   onClose: () => void;
 }) {
+  const [mode, setMode] = useState<"paste" | "openreview">("paste");
   const [raw, setRaw] = useState("");
+  const [forumInput, setForumInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const createReview = useAtlas((s) => s.createReview);
   const paper = useAtlas((s) => activePaper(s));
+  // Tracks the in-flight fetch for OpenReview imports so we can abort when
+  // the user switches tabs or closes the modal mid-fetch.
+  const abortRef = useRef<AbortController | null>(null);
 
   if (!open) return null;
 
-  async function go() {
+  function switchMode(m: "paste" | "openreview") {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+      setBusy(false);
+    }
+    setMode(m);
+    setError(null);
+  }
+
+  async function goPaste() {
     const text = raw.trim();
     if (!text) return;
     setBusy(true);
@@ -516,10 +531,80 @@ export function NewReviewModal({
     }
   }
 
+  async function goOpenReview() {
+    const forum = forumInput.trim();
+    if (!forum) return;
+    setBusy(true);
+    setError(null);
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    try {
+      const r = await fetch("/api/openreview/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ forum }),
+        signal: controller.signal,
+      });
+      // If user switched tabs mid-fetch, the controller was aborted and we
+      // bail rather than mutating state for an out-of-context request.
+      if (controller.signal.aborted || abortRef.current !== controller) {
+        return;
+      }
+      const data = (await r.json()) as {
+        ok: boolean;
+        items?: Array<{
+          id: string;
+          number: string;
+          reviewerLabel: string;
+          comment: string;
+          response: string;
+          status: "todo";
+        }>;
+        paperTitle?: string;
+        decision?: string;
+        message?: string;
+        error?: string;
+      };
+      if (!data.ok || !data.items || data.items.length === 0) {
+        setError(
+          data.message ??
+            data.error ??
+            "Could not fetch reviews. Try the paste flow.",
+        );
+        return;
+      }
+      // Build the raw-text echo so the review session has a recoverable
+      // source if the user ever wants to re-parse the import.
+      const summary =
+        `Imported from OpenReview · ${data.paperTitle ?? "Untitled"}` +
+        (data.decision ? ` · decision: ${data.decision}` : "") +
+        `\n\n` +
+        data.items
+          .map(
+            (it) =>
+              `${it.reviewerLabel} (${it.number})\n${it.comment}`,
+          )
+          .join("\n\n---\n\n");
+      createReview(summary, data.items, paper?.id);
+      setForumInput("");
+      onClose();
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (abortRef.current === controller) abortRef.current = null;
+      setBusy(false);
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/55 backdrop-blur-sm flex items-center justify-center p-6"
-      onClick={onClose}
+      onClick={() => {
+        abortRef.current?.abort();
+        onClose();
+      }}
     >
       <div
         className="panel w-[640px] max-w-[94vw] max-h-[80vh] overflow-hidden shadow-2xl rounded-xl flex flex-col"
@@ -536,19 +621,71 @@ export function NewReviewModal({
             <X className="size-4" />
           </button>
         </div>
+        <div className="px-5 pt-3 border-b border-border">
+          <div className="flex items-center gap-1">
+            {(["paste", "openreview"] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => switchMode(m)}
+                className={cn(
+                  "h-8 px-3 text-[11.5px] font-mono uppercase tracking-[0.12em] border-b-2 -mb-px",
+                  mode === m
+                    ? "text-accent border-accent"
+                    : "text-muted border-transparent hover:text-foreground",
+                )}
+              >
+                {m === "paste" ? "Paste text" : "From OpenReview"}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="p-5 space-y-3 flex-1 overflow-y-auto">
-          <p className="text-[12px] text-muted leading-relaxed">
-            Paste reviewer text from OpenReview, journal email, or PDF. Atlas
-            parses each comment into a separate item, then drafts a response
-            for each one grounded in your manuscript and voice profile.
-          </p>
-          <textarea
-            value={raw}
-            onChange={(e) => setRaw(e.target.value)}
-            placeholder={`Reviewer 1\n1. The motivation in Section 1 is unclear. Please...\n2. The baselines in Table 2 are weak; please add ...\n\nReviewer 2\n1. ...`}
-            rows={14}
-            className="w-full bg-background border border-border rounded-md p-3 text-[13px] font-mono placeholder:text-subtle focus:outline-none focus:border-border-strong resize-none"
-          />
+          {mode === "paste" && (
+            <>
+              <p className="text-[12px] text-muted leading-relaxed">
+                Paste reviewer text from any source. Atlas parses each comment
+                into a separate item, then drafts a response for each one
+                grounded in your manuscript and voice profile.
+              </p>
+              <textarea
+                value={raw}
+                onChange={(e) => setRaw(e.target.value)}
+                placeholder={`Reviewer 1\n1. The motivation in Section 1 is unclear. Please...\n2. The baselines in Table 2 are weak; please add ...\n\nReviewer 2\n1. ...`}
+                rows={14}
+                className="w-full bg-background border border-border rounded-md p-3 text-[13px] font-mono placeholder:text-subtle focus:outline-none focus:border-border-strong resize-none"
+              />
+            </>
+          )}
+          {mode === "openreview" && (
+            <>
+              <p className="text-[12px] text-muted leading-relaxed">
+                Paste an OpenReview forum URL or bare forum id. Atlas walks
+                the v2 / v1 public API for{" "}
+                <span className="font-mono text-foreground">
+                  Official_Review
+                </span>{" "}
+                replies and creates one ReviewerItem per review, with
+                summary / strengths / weaknesses / questions sections when
+                the venue's schema exposes them.
+              </p>
+              <label className="block">
+                <span className="text-[10.5px] font-mono uppercase tracking-[0.12em] text-subtle">
+                  Forum URL or id
+                </span>
+                <input
+                  value={forumInput}
+                  onChange={(e) => setForumInput(e.target.value)}
+                  placeholder="https://openreview.net/forum?id=rhgIgTSSxW"
+                  className="input mt-1 w-full font-mono text-[12.5px]"
+                />
+              </label>
+              <p className="text-[10.5px] text-subtle">
+                We send only the forum id to OpenReview&apos;s public API. No
+                paper text is forwarded. Reviewer attribution is preserved via
+                the per-item label.
+              </p>
+            </>
+          )}
           {error && (
             <div className="text-[11.5px] text-warning bg-warning/5 border border-warning/40 rounded p-2">
               {error}
@@ -557,23 +694,45 @@ export function NewReviewModal({
         </div>
         <div className="px-5 py-3 border-t border-border flex items-center gap-2">
           <span className="text-[10.5px] text-subtle">
-            {raw.length} chars
+            {mode === "paste"
+              ? `${raw.length} chars`
+              : forumInput.trim()
+                ? "ready"
+                : "paste a forum URL or id"}
           </span>
-          <button
-            onClick={go}
-            disabled={!raw.trim() || busy}
-            className="btn btn-primary h-8 text-[12px] ml-auto disabled:opacity-40"
-          >
-            {busy ? (
-              <>
-                <Loader2 className="size-3.5 animate-spin" /> Parsing
-              </>
-            ) : (
-              <>
-                <Plus className="size-3.5" /> Create review
-              </>
-            )}
-          </button>
+          {mode === "paste" ? (
+            <button
+              onClick={goPaste}
+              disabled={!raw.trim() || busy}
+              className="btn btn-primary h-8 text-[12px] ml-auto disabled:opacity-40"
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Parsing
+                </>
+              ) : (
+                <>
+                  <Plus className="size-3.5" /> Create review
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              onClick={goOpenReview}
+              disabled={!forumInput.trim() || busy}
+              className="btn btn-primary h-8 text-[12px] ml-auto disabled:opacity-40"
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" /> Fetching
+                </>
+              ) : (
+                <>
+                  <Plus className="size-3.5" /> Import from OpenReview
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>

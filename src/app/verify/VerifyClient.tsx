@@ -601,7 +601,23 @@ function EventRow({ ev, index }: { ev: ProvenanceEvent; index: number }) {
         <div className="flex items-center gap-2 text-[10.5px] font-mono uppercase tracking-[0.12em] text-subtle">
           <span className="text-foreground">{ev.kind}</span>
           <span>·</span>
-          <span>{ev.actor.label}</span>
+          <span className="inline-flex items-center gap-1">
+            {ev.actor.label}
+            {ev.actor.orcid && (
+              <a
+                href={`https://orcid.org/${ev.actor.orcid}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-0.5 px-1 py-px rounded text-[9.5px] border border-accent/30 bg-accent-soft text-accent normal-case tracking-normal hover:border-accent"
+                title={`ORCID iD ${ev.actor.orcid}`}
+              >
+                <span aria-hidden>iD</span>
+                <span className="tabular-nums">
+                  {ev.actor.orcid.slice(-4)}
+                </span>
+              </a>
+            )}
+          </span>
           {ev.model && (
             <>
               <span>·</span>

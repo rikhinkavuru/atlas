@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { deriveShareKey, getStore, type PublishedLedger } from "@/lib/ledger-store";
+import { requireTier } from "@/lib/tier";
 import type { ProvenanceLedger } from "@/types";
 
 export const runtime = "nodejs";
@@ -18,6 +19,12 @@ interface PublishBody {
  * "the version the author shared with me" from "what's in the workspace now."
  */
 export async function POST(req: NextRequest) {
+  // Publishing a ledger is a Pro feature — see /pricing. Free tier still
+  // gets the local /verify route to validate their own ledger from a JSON
+  // file; only the durable hosted URL is gated.
+  const tierBlock = await requireTier(req, "pro");
+  if (tierBlock) return tierBlock;
+
   let body: PublishBody;
   try {
     body = (await req.json()) as PublishBody;

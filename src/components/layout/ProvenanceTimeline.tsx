@@ -18,7 +18,9 @@ import {
   Check,
 } from "lucide-react";
 import { useAtlas, activePaper } from "@/lib/store";
+import { useSettings } from "@/lib/settings";
 import { exportLedgerJsonLd } from "@/lib/provenance";
+import { orcidUrl } from "@/lib/orcid";
 import { useProvenanceSummary } from "@/lib/use-provenance-summary";
 import { cn } from "@/lib/cn";
 import type { ProvenanceEvent, ProvenanceLedger, ProvenanceSummary } from "@/types";
@@ -45,10 +47,18 @@ export function ProvenanceTimeline() {
 
   async function recordAuthorPoint() {
     if (!paper) return;
+    // Stamp the author's ORCID + display name from settings when present so
+    // reviewers can verify which human signed this event against the
+    // published-paper authorship. Defaults to "You" / no ORCID when unset.
+    const s = useSettings.getState();
     await recordEvent({
       paperId: paper.id,
       kind: "author",
-      actor: { type: "author", label: "You" },
+      actor: {
+        type: "author",
+        label: s.authorName.trim() || "You",
+        ...(s.authorOrcid ? { orcid: s.authorOrcid } : {}),
+      },
       after: paper.title,
     });
   }

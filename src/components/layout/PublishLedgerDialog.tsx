@@ -87,7 +87,19 @@ function DialogBody({ onClose }: { onClose: () => void }) {
         shareKey?: string;
         sharePath?: string;
         error?: string;
+        message?: string;
+        required?: string;
       };
+      // Tier-gating returns 402 with { error: "tier_insufficient", required:
+      // "pro", message: "..." }. Surface that as an upgrade prompt rather
+      // than a generic error.
+      if (r.status === 402 && data.error === "tier_insufficient") {
+        setError(
+          data.message ??
+            "Publishing to a public URL requires the Pro tier. Open Settings to upgrade.",
+        );
+        return;
+      }
       if (!data.ok || !data.shareKey || !data.sharePath) {
         throw new Error(data.error ?? `publish returned ${r.status}`);
       }

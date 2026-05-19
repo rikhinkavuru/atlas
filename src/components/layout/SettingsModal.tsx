@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useSettings, type Provider, type Theme } from "@/lib/settings";
+import { normalizeOrcid } from "@/lib/orcid";
 import { VENUE_PRESETS, type VenueId } from "@/lib/rubrics";
 import { computeVoiceProfile } from "@/lib/voice";
 import { downloadLab, importLabFile } from "@/lib/atlaslab";
@@ -868,8 +869,33 @@ function VoiceSection() {
   const setStyleNotes = useSettings((s) => s.setStyleNotes);
   const requireSources = useSettings((s) => s.requireSources);
   const toggleRequireSources = useSettings((s) => s.toggleRequireSources);
+  const authorName = useSettings((s) => s.authorName);
+  const setAuthorName = useSettings((s) => s.setAuthorName);
+  const authorOrcid = useSettings((s) => s.authorOrcid);
+  const setAuthorOrcid = useSettings((s) => s.setAuthorOrcid);
+  const [orcidInput, setOrcidInput] = useState(authorOrcid);
+  const [orcidError, setOrcidError] = useState<string | null>(null);
   const [samples, setSamples] = useState<string[]>(voice?.samples ?? [""]);
   const [busy, setBusy] = useState(false);
+
+  function commitOrcid() {
+    const trimmed = orcidInput.trim();
+    if (!trimmed) {
+      setAuthorOrcid("");
+      setOrcidError(null);
+      return;
+    }
+    const normalised = normalizeOrcid(trimmed);
+    if (!normalised) {
+      setOrcidError(
+        "Doesn't look like a valid ORCID iD — expected XXXX-XXXX-XXXX-XXXX with a valid checksum.",
+      );
+      return;
+    }
+    setAuthorOrcid(normalised);
+    setOrcidInput(normalised);
+    setOrcidError(null);
+  }
 
   function addSample() {
     setSamples((s) => [...s, ""]);
@@ -903,6 +929,61 @@ function VoiceSection() {
 
   return (
     <div className="space-y-5">
+      <Field label="Author identity">
+        <p className="text-[11.5px] text-subtle leading-relaxed mb-2">
+          Stamped onto every author event in the provenance ledger so
+          reviewers can verify which human signed it. ORCID iD is optional
+          but recommended for camera-ready submissions — it lets a reviewer
+          tie the ledger to your published authorship.
+        </p>
+        <div className="grid sm:grid-cols-2 gap-2">
+          <label className="block">
+            <span className="text-[10.5px] font-mono uppercase tracking-[0.12em] text-subtle">
+              Display name
+            </span>
+            <input
+              value={authorName}
+              onChange={(e) => setAuthorName(e.target.value)}
+              placeholder="Jane Smith"
+              className="input mt-1 w-full"
+              maxLength={80}
+            />
+          </label>
+          <label className="block">
+            <span className="text-[10.5px] font-mono uppercase tracking-[0.12em] text-subtle">
+              ORCID iD
+            </span>
+            <input
+              value={orcidInput}
+              onChange={(e) => {
+                setOrcidInput(e.target.value);
+                if (orcidError) setOrcidError(null);
+              }}
+              onBlur={commitOrcid}
+              placeholder="0000-0001-2345-6789"
+              className={cn(
+                "input mt-1 w-full font-mono text-[12.5px]",
+                orcidError && "border-warning",
+              )}
+            />
+            {orcidError ? (
+              <span className="text-[10.5px] text-warning mt-1 block">
+                {orcidError}
+              </span>
+            ) : authorOrcid ? (
+              <a
+                href={`https://orcid.org/${authorOrcid}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[10.5px] text-accent underline underline-offset-2 mt-1 inline-block"
+              >
+                Verify on orcid.org →
+              </a>
+            ) : null}
+          </label>
+        </div>
+      </Field>
+
       <p className="text-[12px] text-muted leading-relaxed">
         Paste 1–3 paragraphs (or whole sections) of writing you&apos;ve published.
         Atlas computes a style fingerprint — sentence length, hedge habits,

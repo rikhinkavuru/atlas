@@ -34,6 +34,13 @@ export interface Settings {
   /** Per-paper opt-in. Keyed by paperId; presence in the map means the user
    * has made an explicit choice (overrides the default). */
   corpusOptIn: Record<string, boolean>;
+  /** Author ORCID iD in canonical dashed form (XXXX-XXXX-XXXX-XXXX). Stamped
+   *  onto provenance events so reviewers can verify which human signed them.
+   *  Empty string = not set. Validated on save. */
+  authorOrcid: string;
+  /** Display name for the author actor on provenance events. Defaults to
+   *  "Author" when empty. Capped at 80 chars on save. */
+  authorName: string;
   lab: Lab | null;
 }
 
@@ -58,6 +65,8 @@ interface SettingsState extends Settings {
   toggleCorpusOptInDefault: () => void;
   setCorpusOptIn: (paperId: string, value: boolean | null) => void;
   isCorpusOptedIn: (paperId: string) => boolean;
+  setAuthorOrcid: (orcid: string) => void;
+  setAuthorName: (name: string) => void;
   setLab: (lab: Lab | null) => void;
   patchLab: (patch: Partial<Lab>) => void;
   reset: () => void;
@@ -86,6 +95,8 @@ const defaults: Settings = {
   // OR per-paper, and the per-paper override beats the default.
   corpusOptInDefault: false,
   corpusOptIn: {},
+  authorOrcid: "",
+  authorName: "",
   lab: null,
 };
 
@@ -139,6 +150,9 @@ export const useSettings = create<SettingsState>()(
         if (typeof override === "boolean") return override;
         return s.corpusOptInDefault;
       },
+      setAuthorOrcid: (authorOrcid) => set({ authorOrcid }),
+      setAuthorName: (authorName) =>
+        set({ authorName: authorName.slice(0, 80) }),
       setLab: (lab) => set({ lab }),
       patchLab: (patch) =>
         set((s) => ({

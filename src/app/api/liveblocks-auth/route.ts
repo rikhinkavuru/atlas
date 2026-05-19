@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { Liveblocks } from "@liveblocks/node";
+import { requireTier } from "@/lib/tier";
 
 export const runtime = "nodejs";
 
@@ -26,6 +27,12 @@ export async function POST(req: NextRequest) {
       { status: 503 },
     );
   }
+
+  // Real-time co-authoring is a Lab tier feature — see /pricing.
+  // We check tier BEFORE issuing a Liveblocks token so a free-tier user
+  // can't burn through the project's Liveblocks quota.
+  const tierBlock = await requireTier(req, "lab");
+  if (tierBlock) return tierBlock;
 
   let body: { userId?: string; name?: string; workspaceId?: string };
   try {

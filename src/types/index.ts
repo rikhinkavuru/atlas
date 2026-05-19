@@ -184,6 +184,10 @@ export interface ProvenanceEvent {
   actor: {
     type: "author" | "ai" | "import";
     label: string;
+    /** Canonical ORCID iD (XXXX-XXXX-XXXX-XXXX) when the author has linked
+     *  one. Only set for `type: "author"` events. Reviewers can use this to
+     *  verify the human signer matches the published-paper authorship. */
+    orcid?: string;
   };
   provider?: string;
   model?: string;
