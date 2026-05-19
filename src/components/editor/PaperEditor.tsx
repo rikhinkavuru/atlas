@@ -66,7 +66,11 @@ function plainTextLen(html: string): { chars: number; words: number } {
   };
 }
 
-function recordEditPulse(paperId: string, html: string) {
+function recordEditPulse(
+  paperId: string,
+  html: string,
+  actor: { id: string; label: string },
+) {
   const stats = plainTextLen(html);
   const prev = lastSeen.get(paperId) ?? { chars: 0, words: 0, html: "" };
   // Skip if nothing materially changed — Tiptap fires onUpdate even on
@@ -83,8 +87,8 @@ function recordEditPulse(paperId: string, html: string) {
     id: `a_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     paperId,
     timestamp: Date.now(),
-    actorId: "self",
-    actorLabel: "You",
+    actorId: actor.id,
+    actorLabel: actor.label,
     wordsDelta,
     charsDelta,
     snippet: html.slice(0, 200).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
@@ -207,7 +211,13 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       updatePaper(tab.paperId, html);
       // Track-changes pulse — coalesced server-side via recordAuthorEdit so
       // typing a sentence becomes one log entry, not one per keystroke.
-      recordEditPulse(tab.paperId, html);
+      // Actor identity comes from the collab provider when collab is on,
+      // so a remote peer's edits land in the log with their own actorId.
+      // Single-author mode logs everything as "self / You".
+      const actor = collab.enabled
+        ? { id: collab.selfUser.id, label: collab.selfUser.name }
+        : { id: "self", label: "You" };
+      recordEditPulse(tab.paperId, html, actor);
     },
     onSelectionUpdate({ editor }) {
       const { from, to, empty } = editor.state.selection;

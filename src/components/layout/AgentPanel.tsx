@@ -31,8 +31,58 @@ import type {
   EditPlanStep,
   EditProposal,
 } from "@/types";
+import { diffText, renderDiffHtml, newFlashId } from "@/lib/text-diff";
 
 type Mode = "edit" | "ask" | "plan" | "cite";
+
+/**
+ * Find the specific diff-flash span tagged with this flashId and replace it
+ * with plain `after` text. Targeting by flashId (not class) makes rapid
+ * consecutive accepts race-safe: each settle only sees its own flash.
+ * If the span is gone (user navigated, undid, or it never landed) this is
+ * a silent no-op.
+ */
+function settleDiff(
+  editor: {
+    view: { dom: HTMLElement; state: { doc: { resolve: (n: number) => any }; tr: any }; dispatch: (tr: any) => void; posAtDOM: (n: Node, off: number) => number };
+    chain: () => any;
+  },
+  afterText: string,
+  flashId: string,
+) {
+  try {
+    const flash = editor.view.dom.querySelector(
+      `.diff-flash[data-flash-id="${cssEscape(flashId)}"]`,
+    );
+    if (!flash) return;
+    const from = editor.view.posAtDOM(flash, 0);
+    const to = editor.view.posAtDOM(flash, flash.childNodes.length);
+    editor
+      .chain()
+      .focus()
+      .insertContentAt({ from, to }, escapeForInsert(afterText))
+      .run();
+  } catch {
+    /* DOM walked out from under us — fine, the user moved on */
+  }
+}
+
+function cssEscape(s: string): string {
+  // flashId is hex/base36, so this is belt-and-braces — but if the helper
+  // ever sees an attacker-controlled id (it doesn't today) the selector
+  // injection surface is closed.
+  return s.replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
+function escapeForInsert(text: string): string {
+  // We insert as plain text content via Tiptap's insertContent, which accepts
+  // HTML. To avoid the user's prose being parsed as tags (e.g. "<small>"),
+  // escape angle brackets while keeping whitespace intact.
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
 /**
  * Fire-off helper that gates a proposal's sources through /api/verify-proposal
@@ -360,13 +410,33 @@ export function AgentPanel() {
     // arithmetic is wrong once node boundaries (paragraphs) get inserted.
     const before = editor.state.selection.from;
     if (sel) {
+      // Cursor-style inline diff: render <del>/<ins>/<eq> spans in place of
+      // the old text, then settle to just the new text after a brief
+      // animation. The diff HTML is intermediate and never recorded in the
+      // ledger — only p.after lands in the final document.
+      //
+      // Each accept gets its own flashId so rapid consecutive accepts don't
+      // collide: settleDiff targets [data-flash-id="X"] specifically.
+      const flashId = newFlashId();
+      const segs = diffText(sel.text, p.after);
+      const diffHtml = renderDiffHtml(segs, flashId);
       editor
         .chain()
         .focus()
-        .insertContentAt({ from: sel.from, to: sel.to }, p.after)
+        .insertContentAt({ from: sel.from, to: sel.to }, diffHtml)
         .run();
+      window.setTimeout(() => {
+        settleDiff(editor, p.after, flashId);
+      }, 1500);
     } else {
-      editor.chain().focus().insertContent(`\n${p.after}\n`).run();
+      // No selection — insert at cursor. We escape angle brackets so agent
+      // text containing literal "<", ">", or accidental `<script>` doesn't
+      // get parsed as HTML by Tiptap's insertContent.
+      editor
+        .chain()
+        .focus()
+        .insertContent(`\n${escapeForInsert(p.after)}\n`)
+        .run();
     }
     const after = editor.state.selection.from;
     setProposalStatus(msgId, "accepted");

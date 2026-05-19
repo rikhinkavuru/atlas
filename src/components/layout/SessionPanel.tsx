@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { History, Plus, Minus, UserCircle, Network } from "lucide-react";
 import { useAtlas, activePaper } from "@/lib/store";
 import { cn } from "@/lib/cn";
+import { colorForUser } from "@/lib/collab";
 import type { AuthorEdit } from "@/types";
 
 /**
@@ -24,6 +25,22 @@ export function SessionPanel() {
 
   // Group consecutive commits by day for the timeline header.
   const groups = useMemo(() => groupByDay(edits), [edits]);
+  // Distinct authors who have touched this paper — used by the actor key
+  // strip below to give each peer a consistent color.
+  const authors = useMemo(() => {
+    const seen = new Map<string, { label: string; count: number }>();
+    for (const e of edits) {
+      const prev = seen.get(e.actorId);
+      seen.set(e.actorId, {
+        label: e.actorLabel,
+        count: (prev?.count ?? 0) + 1,
+      });
+    }
+    return Array.from(seen.entries()).map(([id, info]) => ({
+      id,
+      ...info,
+    }));
+  }, [edits]);
 
   return (
     <div className="p-2">
@@ -36,6 +53,25 @@ export function SessionPanel() {
       </div>
 
       <PresenceStub />
+
+      {authors.length > 1 && (
+        <div className="px-2 py-1.5 mt-1 flex flex-wrap items-center gap-1.5">
+          {authors.map((a) => (
+            <span
+              key={a.id}
+              className="inline-flex items-center gap-1 text-[10.5px] font-mono"
+              title={`${a.count} edit${a.count === 1 ? "" : "s"}`}
+            >
+              <span
+                className="size-2 rounded-full"
+                style={{ background: colorForUser(a.id) }}
+              />
+              <span className="text-muted">{a.label}</span>
+              <span className="text-subtle/70">·{a.count}</span>
+            </span>
+          ))}
+        </div>
+      )}
 
       {edits.length === 0 && (
         <div className="px-2 py-3 text-xs text-subtle leading-relaxed">
@@ -103,36 +139,53 @@ function EditRow({ edit }: { edit: AuthorEdit }) {
     minute: "2-digit",
   });
   const sign = edit.charsDelta >= 0 ? "+" : "";
+  const isSelf = edit.actorId === "self";
+  const color = isSelf ? "transparent" : colorForUser(edit.actorId);
   return (
-    <div className="px-2 py-1.5 rounded hover:bg-surface-2/60 transition-colors">
-      <div className="flex items-center gap-2 text-[11px]">
-        <span className="text-subtle font-mono w-12 shrink-0 text-[10.5px]">
-          {time}
-        </span>
-        <span
-          className={cn(
-            "font-mono text-[10.5px] tabular-nums shrink-0",
-            edit.charsDelta >= 0 ? "text-accent" : "text-warning",
-          )}
-        >
-          {edit.charsDelta >= 0 ? (
-            <Plus className="size-2.5 inline -mt-0.5 mr-0.5" />
-          ) : (
-            <Minus className="size-2.5 inline -mt-0.5 mr-0.5" />
-          )}
-          {sign}
-          {Math.abs(edit.charsDelta)}c
-          <span className="text-subtle ml-1">
-            {sign}
-            {edit.wordsDelta}w
+    <div className="px-2 py-1.5 rounded hover:bg-surface-2/60 transition-colors flex items-start gap-1.5">
+      {/* Per-author color stripe — invisible for "self" / single-author rows
+          so the panel doesn't introduce visual noise when only one author
+          has touched the paper. */}
+      <span
+        className="w-0.5 self-stretch rounded-full shrink-0 mt-0.5"
+        style={{ background: color }}
+        aria-hidden
+      />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className="text-subtle font-mono w-12 shrink-0 text-[10.5px]">
+            {time}
           </span>
-        </span>
-      </div>
-      {edit.snippet && (
-        <div className="text-[10.5px] text-muted italic leading-snug mt-0.5 pl-14 line-clamp-1">
-          “{edit.snippet}”
+          <span
+            className={cn(
+              "font-mono text-[10.5px] tabular-nums shrink-0",
+              edit.charsDelta >= 0 ? "text-accent" : "text-warning",
+            )}
+          >
+            {edit.charsDelta >= 0 ? (
+              <Plus className="size-2.5 inline -mt-0.5 mr-0.5" />
+            ) : (
+              <Minus className="size-2.5 inline -mt-0.5 mr-0.5" />
+            )}
+            {sign}
+            {Math.abs(edit.charsDelta)}c
+            <span className="text-subtle ml-1">
+              {sign}
+              {edit.wordsDelta}w
+            </span>
+          </span>
+          {!isSelf && (
+            <span className="text-[10px] text-subtle font-mono ml-auto truncate">
+              {edit.actorLabel}
+            </span>
+          )}
         </div>
-      )}
+        {edit.snippet && (
+          <div className="text-[10.5px] text-muted italic leading-snug mt-0.5 line-clamp-1">
+            “{edit.snippet}”
+          </div>
+        )}
+      </div>
     </div>
   );
 }

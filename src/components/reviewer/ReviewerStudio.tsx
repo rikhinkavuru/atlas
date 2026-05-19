@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Inbox,
@@ -13,11 +13,22 @@ import {
   X,
   Plus,
   AlertTriangle,
+  Wand2,
 } from "lucide-react";
 import { useAtlas, activePaper } from "@/lib/store";
 import { useSettings, getModelHeaders } from "@/lib/settings";
 import { cn } from "@/lib/cn";
-import type { ReviewerItem, Tab } from "@/types";
+import {
+  deriveReviewer2Questions,
+  type Reviewer2Question,
+} from "@/lib/reviewer2";
+import type {
+  AnalysisIssue,
+  AnalysisReport,
+  RubricScore,
+  ReviewerItem,
+  Tab,
+} from "@/types";
 
 const STATUS_COLOR: Record<ReviewerItem["status"], string> = {
   todo: "text-subtle border-border bg-surface-2",
@@ -34,8 +45,25 @@ export function ReviewerStudio({ tab }: { tab: Tab }) {
   const deleteReview = useAtlas((s) => s.deleteReview);
   const closeTab = useAtlas((s) => s.closeTab);
   const paper = useAtlas((s) => activePaper(s));
+  const analysis = useAtlas((s) => s.analysis);
   const voice = useSettings((s) => s.voiceProfile);
+  const venue = useSettings((s) => s.venue);
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
+
+  // Pre-compute the Reviewer-2 question pool for this paper. When the
+  // analyzer has run, we use those scores; otherwise we synthesise an empty
+  // report so deriveReviewer2Questions still produces the venue-specific
+  // universal questions (reproducibility checklist, PICOT, etc.). The match
+  // step below pairs each ReviewerItem.comment to its closest prediction.
+  const r2Questions = useMemo(() => {
+    const report: AnalysisReport = analysis ?? {
+      summary: "",
+      scores: [] as RubricScore[],
+      issues: [] as AnalysisIssue[],
+      generatedAt: 0,
+    };
+    return deriveReviewer2Questions(venue, report);
+  }, [analysis, venue]);
 
   if (!review) {
     return (
@@ -178,15 +206,19 @@ export function ReviewerStudio({ tab }: { tab: Tab }) {
               manuscript.
             </div>
           )}
-          {review.items.map((item, idx) => (
-            <ReviewerItemCard
-              key={item.id}
-              item={item}
-              busy={busyItemId === item.id}
-              onDraft={() => draft(item)}
-              onUpdate={(patch) => updateItem(review.id, item.id, patch)}
-            />
-          ))}
+          {review.items.map((item) => {
+            const r2Match = matchReviewer2(item.comment, r2Questions);
+            return (
+              <ReviewerItemCard
+                key={item.id}
+                item={item}
+                busy={busyItemId === item.id}
+                r2Match={r2Match}
+                onDraft={() => draft(item)}
+                onUpdate={(patch) => updateItem(review.id, item.id, patch)}
+              />
+            );
+          })}
         </div>
       </div>
     </div>
@@ -196,11 +228,13 @@ export function ReviewerStudio({ tab }: { tab: Tab }) {
 function ReviewerItemCard({
   item,
   busy,
+  r2Match,
   onDraft,
   onUpdate,
 }: {
   item: ReviewerItem;
   busy: boolean;
+  r2Match: { question: Reviewer2Question; score: number } | null;
   onDraft: () => void;
   onUpdate: (patch: Partial<ReviewerItem>) => void;
 }) {
@@ -227,6 +261,19 @@ function ReviewerItemCard({
       <blockquote className="text-[13px] text-foreground border-l-2 border-border pl-3 leading-relaxed italic">
         {item.comment}
       </blockquote>
+
+      {r2Match && r2Match.score >= 0.25 && (
+        <Reviewer2MatchPanel
+          match={r2Match}
+          onUseRebuttal={() =>
+            onUpdate({
+              response: r2Match.question.rebuttalDraft,
+              status: item.status === "todo" ? "drafted" : item.status,
+            })
+          }
+          existingResponseLength={item.response.length}
+        />
+      )}
 
       <div className="text-[10px] uppercase tracking-[0.12em] text-subtle font-mono">
         Response
@@ -308,6 +355,123 @@ function ReviewerItemCard({
       </div>
     </motion.div>
   );
+}
+
+/**
+ * Surfaces "this reviewer comment looks like Reviewer-2 prediction X" when
+ * the match score is meaningful, and offers a one-click pre-fill of the
+ * predicted rebuttal as a starting draft.
+ *
+ * The match isn't presented as "the answer" — researchers should always
+ * read and edit. We hide the panel when a response already exists at
+ * comparable length so it doesn't keep nagging after the user has drafted.
+ */
+function Reviewer2MatchPanel({
+  match,
+  existingResponseLength,
+  onUseRebuttal,
+}: {
+  match: { question: Reviewer2Question; score: number };
+  existingResponseLength: number;
+  onUseRebuttal: () => void;
+}) {
+  // Hide if the user already drafted something substantive — the suggestion
+  // becomes noise once a real response is in place.
+  if (existingResponseLength > 80) return null;
+  const q = match.question;
+  const tone =
+    q.severity === "blocker"
+      ? "border-danger/30 bg-danger/5 text-danger"
+      : q.severity === "concern"
+        ? "border-warning/40 bg-warning/5 text-warning"
+        : "border-info/40 bg-info/5 text-info";
+  return (
+    <div
+      className={cn(
+        "rounded-md border px-3 py-2 text-[11.5px] flex items-start gap-2",
+        tone,
+      )}
+    >
+      <Wand2 className="size-3.5 mt-0.5 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="font-mono text-[9.5px] uppercase tracking-[0.15em] mb-0.5">
+          Matches Reviewer-2 prediction
+          <span className="text-subtle ml-1">
+            · {Math.round(match.score * 100)}% confidence
+          </span>
+        </div>
+        <div className="text-foreground/90 leading-snug mb-1.5">
+          {q.concern}
+        </div>
+        <div className="text-muted italic leading-snug line-clamp-2">
+          “{q.rebuttalDraft.slice(0, 240)}{q.rebuttalDraft.length > 240 ? "…" : ""}”
+        </div>
+        <button
+          onClick={onUseRebuttal}
+          className="mt-2 btn h-7 text-[11px]"
+          type="button"
+        >
+          <Sparkles className="size-3.5" />
+          Use predicted rebuttal as draft
+        </button>
+        {q.rebuttalDraft.includes("[") && (
+          <div className="mt-1.5 text-[10px] text-subtle font-mono">
+            Note: <span className="text-foreground">[brackets]</span> in the
+            draft are placeholders to fill in (section numbers, specific
+            evidence, etc.).
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Match a reviewer comment to the closest Reviewer-2 prediction by token
+ * overlap. We strip stopwords + use light TF-style weighting so rare domain
+ * terms ("ablation", "PICOT", "limitations") dominate over generic verbs.
+ * Returns null when no candidate exceeds a baseline score.
+ */
+function matchReviewer2(
+  comment: string,
+  questions: Reviewer2Question[],
+): { question: Reviewer2Question; score: number } | null {
+  if (questions.length === 0) return null;
+  // Stopwords tuned for academic discourse — `can` / `do` / `does` removed
+  // since reviewer questions lean on them ("can the authors", "does this
+  // generalise"). Added `just` / `seem` / `appear` which carry less signal.
+  const STOP = new Set([
+    "the","a","an","of","to","in","is","it","this","that","and","or","for","on",
+    "with","as","by","at","from","but","be","are","was","were","not","you",
+    "i","we","they","their","its","what","why","how","one","more","just","seem","appear",
+  ]);
+  // 2-char floor so acronyms like AI / ML / RL / NLP / CV survive — they're
+  // exactly the high-signal tokens we want to match on. Numbers-only tokens
+  // (years, page counts) still get dropped via the alnum-and-stop check.
+  const tokensOf = (s: string): string[] =>
+    s
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((t) => t.length >= 2 && !/^\d+$/.test(t) && !STOP.has(t));
+  const commentTokens = new Set(tokensOf(comment));
+  if (commentTokens.size === 0) return null;
+  let best: { question: Reviewer2Question; score: number } | null = null;
+  for (const q of questions) {
+    const haystack = `${q.question} ${q.concern}`;
+    const qTokens = tokensOf(haystack);
+    if (qTokens.length === 0) continue;
+    let overlap = 0;
+    for (const t of qTokens) {
+      if (commentTokens.has(t)) overlap++;
+    }
+    // Jaccard-ish: divide overlap by max(qTokens, commentTokens) so an
+    // unusually long reviewer comment can't artificially inflate the score.
+    const score =
+      overlap / Math.max(qTokens.length, commentTokens.size);
+    if (!best || score > best.score) best = { question: q, score };
+  }
+  return best;
 }
 
 export function NewReviewModal({

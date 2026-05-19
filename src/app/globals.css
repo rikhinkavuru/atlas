@@ -403,6 +403,50 @@ body {
   font-size: 1.05em;
 }
 
+/* Inline diff animation for accepted agent proposals — Cursor-style red
+   strikethrough fades out while green insertion fades in, then the span
+   collapses to plain text (done in JS via settleDiff, ~1.5s after insert).
+   The "diff-flash" container exists only during the animation window. */
+.tiptap .diff-flash {
+  display: inline;
+}
+.tiptap .diff-del {
+  text-decoration: line-through;
+  color: var(--color-danger, #e76f6f);
+  background: color-mix(in srgb, var(--color-danger, #e76f6f) 14%, transparent);
+  border-radius: 2px;
+  padding: 0 2px;
+  margin: 0 1px;
+  animation: atlas-diff-del-fade 1.4s ease forwards;
+}
+.tiptap .diff-ins {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-radius: 2px;
+  padding: 0 2px;
+  margin: 0 1px;
+  animation: atlas-diff-ins-rise 1.4s ease forwards;
+}
+.tiptap .diff-eq {
+  /* No animation — these tokens are common to before and after. */
+}
+@keyframes atlas-diff-del-fade {
+  0% { opacity: 1; max-width: none; }
+  60% { opacity: 0.6; }
+  95% { opacity: 0; padding: 0; margin: 0; }
+  100% { opacity: 0; padding: 0; margin: 0; }
+}
+@keyframes atlas-diff-ins-rise {
+  0% { background: color-mix(in srgb, var(--accent) 42%, transparent); }
+  60% { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+  100% { background: transparent; color: inherit; padding: 0; margin: 0; }
+}
+/* Respect reduced-motion: collapse immediately. */
+@media (prefers-reduced-motion: reduce) {
+  .tiptap .diff-del { display: none; }
+  .tiptap .diff-ins { animation: none; background: transparent; padding: 0; margin: 0; }
+}
+
 /* Liveblocks/Yjs collaboration cursor — each remote peer's selection
    renders a colored caret + name flag. Colors are injected inline via
    the CollaborationCursor extension's `user.color` prop; CSS just
