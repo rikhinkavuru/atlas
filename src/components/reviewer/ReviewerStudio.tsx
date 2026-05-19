@@ -22,6 +22,7 @@ import {
   deriveReviewer2Questions,
   type Reviewer2Question,
 } from "@/lib/reviewer2";
+import { ResponseLetterDialog } from "./ResponseLetterDialog";
 import type {
   AnalysisIssue,
   AnalysisReport,
@@ -108,47 +109,7 @@ export function ReviewerStudio({ tab }: { tab: Tab }) {
     }
   }
 
-  function exportLetter() {
-    if (!review || !paper) return;
-    const lines: string[] = [];
-    lines.push(`# Response to Reviewers`);
-    lines.push(``);
-    lines.push(`Manuscript: ${paper.title}`);
-    lines.push(``);
-    lines.push(`Dear Editor,`);
-    lines.push(``);
-    lines.push(
-      `We thank the reviewers for their careful reading. Below we respond to each comment.`,
-    );
-    lines.push(``);
-    let currentReviewer = "";
-    for (const it of review.items) {
-      if (it.reviewerLabel !== currentReviewer) {
-        currentReviewer = it.reviewerLabel;
-        lines.push(`## ${currentReviewer}`);
-        lines.push(``);
-      }
-      lines.push(`### ${it.number}. ${it.reviewerLabel}`);
-      lines.push(``);
-      lines.push(`**Comment.** ${it.comment}`);
-      lines.push(``);
-      lines.push(`**Response.** ${it.response || "[no response drafted]"}`);
-      if (it.linkedQuote) {
-        lines.push(``);
-        lines.push(`> ${it.linkedQuote}`);
-      }
-      lines.push(``);
-    }
-    lines.push(`Sincerely,`);
-    lines.push(`The authors`);
-    const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `response-to-reviewers.md`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
+  const [letterDialogOpen, setLetterDialogOpen] = useState(false);
 
   const stats = {
     total: review.items.length,
@@ -180,7 +141,10 @@ export function ReviewerStudio({ tab }: { tab: Tab }) {
             <Sparkles className="size-3.5" />
             Draft all
           </button>
-          <button onClick={exportLetter} className="btn h-7 text-[11px]">
+          <button
+            onClick={() => setLetterDialogOpen(true)}
+            className="btn h-7 text-[11px]"
+          >
             <Download className="size-3.5" />
             Export letter
           </button>
@@ -221,6 +185,12 @@ export function ReviewerStudio({ tab }: { tab: Tab }) {
           })}
         </div>
       </div>
+      <ResponseLetterDialog
+        open={letterDialogOpen}
+        onClose={() => setLetterDialogOpen(false)}
+        session={review}
+        paperTitle={paper?.title}
+      />
     </div>
   );
 }

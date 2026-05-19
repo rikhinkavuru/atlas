@@ -31,7 +31,7 @@ import { computeVoiceProfile } from "@/lib/voice";
 import { downloadLab, importLabFile } from "@/lib/atlaslab";
 import { LabSection } from "./LabSection";
 import { cn } from "@/lib/cn";
-import { Network, Archive } from "lucide-react";
+import { Network, Archive, CreditCard } from "lucide-react";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 
 interface Props {
@@ -48,6 +48,7 @@ type Section =
   | "lab"
   | "workspace"
   | "appearance"
+  | "billing"
   | "about";
 
 const OPENAI_MODELS = [
@@ -161,6 +162,12 @@ export function SettingsModal({ open, onClose }: Props) {
                 label="Appearance"
               />
               <NavItem
+                active={section === "billing"}
+                onClick={() => setSection("billing")}
+                icon={<CreditCard className="size-3.5" />}
+                label="Billing"
+              />
+              <NavItem
                 active={section === "about"}
                 onClick={() => setSection("about")}
                 icon={<Sparkles className="size-3.5" />}
@@ -191,6 +198,7 @@ export function SettingsModal({ open, onClose }: Props) {
                   {section === "lab" && "Lab graph"}
                   {section === "workspace" && "Workspace export & import"}
                   {section === "appearance" && "Appearance"}
+                  {section === "billing" && "Billing & subscription"}
                   {section === "about" && "About Atlas"}
                 </h2>
                 <button
@@ -382,6 +390,8 @@ export function SettingsModal({ open, onClose }: Props) {
                     </Field>
                   </div>
                 )}
+
+                {section === "billing" && <BillingSection />}
 
                 {section === "about" && (
                   <div className="space-y-4 text-[13px] text-muted leading-relaxed">
@@ -1287,5 +1297,236 @@ function LibraryRow({
         <Trash2 className="size-3.5" />
       </button>
     </li>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// BillingSection — Stripe Checkout + Customer Portal launch.
+//
+// Detects on mount whether billing is configured server-side (probe
+// /api/billing/checkout with a HEAD-ish empty POST → 503 if disabled).
+// Renders three states: not-configured, free (with upgrade buttons),
+// paid (with manage-subscription button). The actual tier comes from
+// server-rendered Clerk session metadata in real auth setups; for the
+// purposes of the UI we surface what we can infer from the URL on
+// post-checkout return and a small probe.
+
+function BillingSection() {
+  const [probe, setProbe] = useState<
+    "checking" | "configured" | "disabled"
+  >("checking");
+  const [busy, setBusy] = useState<null | "checkout-pro" | "checkout-lab" | "portal">(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Cheap configuration probe: send an empty POST. 503 = not configured;
+    // 400 (bad json / missing tier) = configured. We don't care about the
+    // body, only the status.
+    let cancelled = false;
+    fetch("/api/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+      .then((r) => {
+        if (cancelled) return;
+        setProbe(r.status === 503 ? "disabled" : "configured");
+      })
+      .catch(() => {
+        if (!cancelled) setProbe("disabled");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function upgrade(tier: "pro" | "lab") {
+    setBusy(`checkout-${tier}`);
+    setError(null);
+    try {
+      const r = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier, returnTo: "/app" }),
+      });
+      const data = (await r.json()) as {
+        ok?: boolean;
+        url?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!data.ok || !data.url) {
+        setError(data.message ?? data.error ?? `HTTP ${r.status}`);
+        return;
+      }
+      window.location.href = data.url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function openPortal() {
+    setBusy("portal");
+    setError(null);
+    try {
+      const r = await fetch("/api/billing/portal", { method: "POST" });
+      const data = (await r.json()) as {
+        ok?: boolean;
+        url?: string;
+        error?: string;
+        message?: string;
+      };
+      if (!data.ok || !data.url) {
+        setError(data.message ?? data.error ?? `HTTP ${r.status}`);
+        return;
+      }
+      window.open(data.url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (probe === "checking") {
+    return (
+      <div className="text-[12px] text-subtle flex items-center gap-2">
+        <Loader2 className="size-3.5 animate-spin" />
+        Checking billing configuration…
+      </div>
+    );
+  }
+
+  if (probe === "disabled") {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-md border border-warning/40 bg-warning/5 text-warning text-[12.5px] p-3 flex items-start gap-2">
+          <ShieldAlert className="size-4 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold mb-0.5">Billing not configured</div>
+            <p className="leading-relaxed">
+              This Atlas deployment hasn&apos;t wired up Stripe — paid tiers
+              are available but checkout endpoints return 503. Until then,
+              gated features (publish ledger, real-time collab) can be
+              unlocked locally via the{" "}
+              <span className="font-mono">ATLAS_FORCE_TIER</span> env var.
+            </p>
+          </div>
+        </div>
+        <p className="text-[11.5px] text-subtle leading-relaxed">
+          Operator setup: see <span className="font-mono">.env.example</span>{" "}
+          for the four Stripe vars
+          (<span className="font-mono">STRIPE_SECRET_KEY</span>,{" "}
+          <span className="font-mono">STRIPE_WEBHOOK_SECRET</span>,{" "}
+          <span className="font-mono">STRIPE_PRICE_PRO</span>,{" "}
+          <span className="font-mono">STRIPE_PRICE_LAB</span>) and point a
+          Stripe webhook at <span className="font-mono">/api/billing/webhook</span>.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <Field label="Current plan">
+        <p className="text-[12.5px] text-muted leading-relaxed">
+          Your tier is read from Clerk publicMetadata on every request — we
+          don&apos;t display it here directly, but every gated route will
+          tell you which tier you&apos;re on if you hit it. Recently
+          changed your subscription? Reload the page to pick up the new
+          tier.
+        </p>
+      </Field>
+
+      <Field label="Upgrade">
+        <div className="grid sm:grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => upgrade("pro")}
+            disabled={busy !== null}
+            className="panel p-4 text-left rounded-lg hover:border-border-strong disabled:opacity-50 transition-colors"
+          >
+            <div className="flex items-center gap-1.5 text-[12.5px] font-semibold">
+              <CreditCard className="size-3.5 text-accent" />
+              Pro · $20 / month
+            </div>
+            <div className="text-[11.5px] text-subtle mt-1 leading-relaxed">
+              Public ledger URLs, hosted citation verification, cross-device
+              sync. 14-day trial.
+            </div>
+            <div className="mt-2 text-[11px] text-accent inline-flex items-center gap-1">
+              {busy === "checkout-pro" ? (
+                <>
+                  <Loader2 className="size-3 animate-spin" />
+                  Redirecting…
+                </>
+              ) : (
+                <>Continue to checkout →</>
+              )}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => upgrade("lab")}
+            disabled={busy !== null}
+            className="panel p-4 text-left rounded-lg hover:border-border-strong disabled:opacity-50 transition-colors"
+          >
+            <div className="flex items-center gap-1.5 text-[12.5px] font-semibold">
+              <Network className="size-3.5 text-accent" />
+              Lab · $60 / seat / month
+            </div>
+            <div className="text-[11.5px] text-subtle mt-1 leading-relaxed">
+              Everything in Pro + real-time multi-author editing and shared
+              Lab Graph.
+            </div>
+            <div className="mt-2 text-[11px] text-accent inline-flex items-center gap-1">
+              {busy === "checkout-lab" ? (
+                <>
+                  <Loader2 className="size-3 animate-spin" />
+                  Redirecting…
+                </>
+              ) : (
+                <>Continue to checkout →</>
+              )}
+            </div>
+          </button>
+        </div>
+      </Field>
+
+      <Field label="Manage subscription">
+        <p className="text-[11.5px] text-subtle leading-relaxed mb-2">
+          Existing customers can update payment method, change seats, or
+          cancel via the Stripe Customer Portal.
+        </p>
+        <button
+          type="button"
+          onClick={openPortal}
+          disabled={busy !== null}
+          className="btn h-8 text-[12px] disabled:opacity-50"
+        >
+          {busy === "portal" ? (
+            <>
+              <Loader2 className="size-3.5 animate-spin" /> Opening…
+            </>
+          ) : (
+            <>
+              <ExternalLink className="size-3.5" />
+              Open Customer Portal
+            </>
+          )}
+        </button>
+      </Field>
+
+      {error && (
+        <div className="rounded-md border border-warning/40 bg-warning/5 text-warning text-[12px] p-2.5 flex items-start gap-2">
+          <ShieldAlert className="size-3.5 shrink-0 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+    </div>
   );
 }
