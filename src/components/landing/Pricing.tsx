@@ -6,56 +6,99 @@ import { Check, ArrowRight } from "lucide-react";
 import { SectionHeader } from "./Features";
 import { cn } from "@/lib/cn";
 
-const TIERS = [
+/**
+ * Feature item shapes:
+ *   string                                 → shipped and gated to this tier
+ *   { text, status: "shipped-free" }       → present today, technically free —
+ *                                            we keep it in the higher tier's
+ *                                            "everything in lower + ..." line.
+ *   { text, status: "roadmap" }            → planned, not shipped. Labeled as
+ *                                            "Coming soon" in the UI.
+ *   { text, status: "beta" }               → shipped behind an env-var flag,
+ *                                            not yet enforced by tier.
+ */
+type FeatureItem = string | { text: string; status: "roadmap" | "beta" };
+
+const TIERS: {
+  name: string;
+  blurb: string;
+  price: string;
+  period: string;
+  cta: string;
+  href: string;
+  highlighted: boolean;
+  features: FeatureItem[];
+}[] = [
   {
     name: "Free",
-    blurb: "For one paper, on one laptop.",
+    blurb: "Single-author. BYOK. Everything in your browser.",
     price: "$0",
     period: "forever",
     cta: "Start free",
     href: "/app",
     highlighted: false,
     features: [
-      "Full editor + agent + analyzer",
+      "Full editor + agent + Paper Critic + Reviewer-2 simulator",
       "Bring your own OpenAI / Anthropic key",
-      "PDF import, LaTeX export, voice profile",
-      "Provenance Ledger + public Verify route",
-      "Lab Graph (local members, rules, capsule export/import)",
-      "Local-first — drafts never leave your browser",
+      "PDF import, LaTeX export, math equations, voice profile",
+      "Provenance Ledger + signed events + /verify viewer",
+      "Lab Capsule export / import (members, rules, voice, library)",
+      "Bibliography in APA / Chicago / MLA / Vancouver / IEEE",
+      "Drafts never leave your browser",
     ],
   },
   {
     name: "Pro",
-    blurb: "For the PhD running multiple drafts and submissions.",
-    price: "$19",
+    blurb:
+      "Public ledger URLs, server-resolved citations, and cross-device sync.",
+    price: "$20",
     period: "/ month",
     cta: "Start 14-day trial",
     href: "/app?upgrade=pro",
     highlighted: true,
     features: [
       "Everything in Free",
-      "Managed AI — no key required, fair-use unlimited",
-      "Sync your workspace + Lab capsule across devices",
-      "Nia citation library included (1,000 sources)",
-      "Priority response-to-reviewers drafting",
-      "Workspace history & version diffs",
+      "Public ledger URLs (/p/<shareKey>) with durable Vercel Blob storage",
+      "Hosted citation verification — CrossRef + OpenAlex + Semantic Scholar + arXiv",
+      "OpenReview corpus probe for venue calibration",
+      "Atlas pays the API bill — BYOK still works",
+      { text: "Workspace + Lab Capsule sync across devices", status: "roadmap" },
+      { text: "Priority queue for response-to-reviewers drafting", status: "roadmap" },
     ],
   },
   {
     name: "Lab",
-    blurb: "Adds multi-user realtime on top of the same Lab Graph.",
-    price: "$59",
+    blurb: "Real-time multi-author editing with a shared Lab Graph.",
+    price: "$60",
     period: "/ seat / month",
-    cta: "Talk to us",
-    href: "mailto:lab@paper-atlas.com",
+    cta: "Start lab trial",
+    href: "/app?upgrade=lab",
     highlighted: false,
     features: [
       "Everything in Pro",
-      "Realtime co-authoring with suggestion mode",
-      "Live Lab Graph sync across the whole group",
-      "Centralised billing & SSO",
-      "Custom venue rubrics per group",
-      "Dedicated onboarding session",
+      { text: "Real-time co-authoring (Yjs + Liveblocks) with live presence", status: "beta" },
+      "Multi-author Track Changes log, color-coded per peer",
+      { text: "Shared Lab Graph propagates voice + library + rules live", status: "roadmap" },
+      { text: "Custom venue rubrics per lab", status: "roadmap" },
+      { text: "Centralised billing + SSO", status: "roadmap" },
+      { text: "Up to 5 seats with seat-level enforcement", status: "roadmap" },
+    ],
+  },
+  {
+    name: "Enterprise",
+    blurb: "Universities, journals, and venues running Atlas at scale.",
+    price: "Talk",
+    period: "to us",
+    cta: "Contact sales",
+    href: "mailto:lab@paper-atlas.com",
+    highlighted: false,
+    features: [
+      "Everything in Lab",
+      { text: "Self-hosted ledger storage (Postgres / S3-compatible)", status: "roadmap" },
+      { text: "SSO via SAML / OIDC; SCIM provisioning", status: "roadmap" },
+      { text: "Audit logs + retention controls", status: "roadmap" },
+      { text: "Dedicated Reviewer-Model fine-tune access", status: "roadmap" },
+      "Priority issue routing + named onboarding",
     ],
   },
 ];
@@ -86,7 +129,7 @@ export function Pricing() {
             hidden: {},
             visible: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
           }}
-          className="mt-16 grid gap-5 md:grid-cols-3"
+          className="mt-16 grid gap-5 md:grid-cols-2 lg:grid-cols-4"
         >
           {TIERS.map((t) => (
             <motion.div
@@ -128,12 +171,45 @@ export function Pricing() {
                 <ArrowRight className="size-3.5" />
               </Link>
               <ul className="mt-6 space-y-2 text-[13px]">
-                {t.features.map((f, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <Check className="size-4 text-accent mt-0.5 shrink-0" />
-                    <span className="text-foreground/85">{f}</span>
-                  </li>
-                ))}
+                {t.features.map((f, i) => {
+                  const isObj = typeof f === "object";
+                  const text = isObj ? f.text : f;
+                  const status = isObj ? f.status : null;
+                  return (
+                    <li key={i} className="flex items-start gap-2">
+                      <Check
+                        className={cn(
+                          "size-4 mt-0.5 shrink-0",
+                          status === "roadmap"
+                            ? "text-subtle/60"
+                            : status === "beta"
+                              ? "text-warning"
+                              : "text-accent",
+                        )}
+                      />
+                      <span
+                        className={cn(
+                          "flex-1",
+                          status === "roadmap"
+                            ? "text-foreground/60"
+                            : "text-foreground/85",
+                        )}
+                      >
+                        {text}
+                        {status === "roadmap" && (
+                          <span className="ml-1.5 inline-flex items-center px-1 py-px rounded-full text-[9px] font-mono uppercase tracking-[0.12em] border border-border bg-surface-2 text-subtle align-middle">
+                            roadmap
+                          </span>
+                        )}
+                        {status === "beta" && (
+                          <span className="ml-1.5 inline-flex items-center px-1 py-px rounded-full text-[9px] font-mono uppercase tracking-[0.12em] border border-warning/40 bg-warning/5 text-warning align-middle">
+                            beta · needs env vars
+                          </span>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             </motion.div>
           ))}

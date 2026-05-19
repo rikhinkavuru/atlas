@@ -49,13 +49,21 @@ export function ReviewerModelClient() {
         <h2 className="text-[26px] font-semibold tracking-tight text-foreground mb-5">
           Contribute to the next training run
         </h2>
-        <p className="text-[14.5px] text-muted leading-relaxed mb-5">
-          When you opt in, Atlas will attach an anonymised tuple to each paper
+        <p className="text-[14.5px] text-muted leading-relaxed mb-3">
+          When you opt in, Atlas attaches an anonymised tuple to each paper
           you finalise: <code className="font-mono text-foreground">(draft, accepted-suggestions, rejected-suggestions, venue, decision-if-known)</code>. No
           author names, no affiliations, no identifying metadata. You can
           revoke per-paper or globally at any time, and the next training run
           drops your data. Until the first training run, nothing leaves your
           browser.
+        </p>
+        <p className="text-[13.5px] text-muted leading-relaxed mb-5">
+          The buttons below set your <span className="text-foreground">global default</span> for new papers. To
+          override per-paper, open the workspace and pick{" "}
+          <span className="font-mono text-foreground">File → Corpus opt-in…</span>{" "}
+          (or run <span className="kbd">⌘K</span>{" "}
+          <span className="text-foreground">Reviewer-Model corpus opt-in</span>)
+          — the per-paper choice always wins.
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
           <button

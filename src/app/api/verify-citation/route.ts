@@ -100,7 +100,14 @@ async function openalex(q: string, isDoi: boolean): Promise<CitationCandidate[]>
     const url = isDoi
       ? `https://api.openalex.org/works/doi:${encodeURIComponent(q)}`
       : `https://api.openalex.org/works?search=${encodeURIComponent(q)}&per_page=5&select=id,doi,title,publication_year,authorships,primary_location`;
-    const r = await fetch(url);
+    // OpenAlex's "polite pool" gives faster + more reliable responses to
+    // requests that include a contact email in the User-Agent.
+    const r = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Atlas/1.0 (https://github.com/rikhinkavuru/atlas; mailto:hello@paper-atlas.com)",
+      },
+    });
     if (!r.ok) return [];
     const json = (await r.json()) as any;
     const items = isDoi ? [json] : (json.results ?? []);
@@ -125,7 +132,12 @@ async function openalex(q: string, isDoi: boolean): Promise<CitationCandidate[]>
 async function semanticScholar(q: string): Promise<CitationCandidate[]> {
   try {
     const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=5&fields=title,authors,year,externalIds,url`;
-    const r = await fetch(url);
+    const r = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Atlas/1.0 (https://github.com/rikhinkavuru/atlas; mailto:hello@paper-atlas.com)",
+      },
+    });
     if (!r.ok) return [];
     const json = (await r.json()) as any;
     return (json.data ?? []).map((m: any): CitationCandidate => ({

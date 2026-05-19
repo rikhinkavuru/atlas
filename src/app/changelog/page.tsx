@@ -17,6 +17,106 @@ interface Release {
 
 const RELEASES: Release[] = [
   {
+    version: "v0.7.0",
+    date: "2026-05-19",
+    headline: "Citation enrichment + honest pricing",
+    items: [
+      {
+        tag: "ship",
+        text: "Citation registry auto-populates when you insert via the /citation form or NavDialogs — and the References dialog gets a one-click 'Enrich missing' button that resolves title/authors/year via CrossRef + OpenAlex + Semantic Scholar.",
+      },
+      {
+        tag: "polish",
+        text: "Pricing page rewritten — every feature claim is either shipped, marked beta (real-time collab needs env vars), or labelled roadmap. No more aspirational tier copy.",
+      },
+      {
+        tag: "polish",
+        text: "/reviewer-model copy updated to explain that the global default is overridable per-paper via File → Corpus opt-in.",
+      },
+      {
+        tag: "fix",
+        text: "Citation Verify candidate no longer goes stale when the URL is edited after verification — both SlashMenu and NavDialogs clear the cached candidate on URL change.",
+      },
+      {
+        tag: "fix",
+        text: "/api/verify-citation now sends a polite-pool User-Agent to OpenAlex and Semantic Scholar; enrichment batch paced at 150ms between calls.",
+      },
+    ],
+  },
+  {
+    version: "v0.6.0",
+    date: "2026-05-19",
+    headline: "Cursor diff + multi-author log + reviewer-2 in studio",
+    items: [
+      {
+        tag: "ship",
+        text: "Accepting an agent edit now plays a Cursor-style inline diff: red strikethrough fades out while green insertion rises in, then settles to plain text. Respects prefers-reduced-motion. Race-safe via per-flash IDs.",
+      },
+      {
+        tag: "moat",
+        text: "Track Changes panel groups edits per author with stable colors. When multi-author collab is on, remote peers' edits land in your local log with their actorId.",
+      },
+      {
+        tag: "moat",
+        text: "Reviewer Studio pre-fills rebuttal drafts: each pasted reviewer comment matches against the Reviewer-2 simulator's predictions (Jaccard-style token overlap) and offers a one-click 'Use predicted rebuttal' button.",
+      },
+      {
+        tag: "fix",
+        text: "Closed an XSS path in agent edit proposals — the no-selection branch now escapes p.after before insertContent.",
+      },
+    ],
+  },
+  {
+    version: "v0.5.0",
+    date: "2026-05-18",
+    headline: "Real-time collab foundation + per-paper opt-in",
+    items: [
+      {
+        tag: "moat",
+        text: "Real-time multi-author editing via Liveblocks + Yjs. Workspace-scoped tokens, per-paper rooms, presence chips in the TopBar. Feature-flagged behind NEXT_PUBLIC_LIVEBLOCKS_PUBLIC_KEY + LIVEBLOCKS_SECRET_KEY so single-author mode stays clean.",
+      },
+      {
+        tag: "ship",
+        text: "Per-paper Reviewer-Model corpus opt-in. Three states (Opt in / Opt out / Use default) with a global default fallback. File → Corpus opt-in… surfaces it.",
+      },
+      {
+        tag: "ship",
+        text: "/api/reviewer-model/eval harness runs the heuristic-v1 critic against held-out review pairs and returns per-case match (agree / miss-low / miss-high). Schema-versioned for the trained-model swap.",
+      },
+      {
+        tag: "ship",
+        text: "/api/reviewer-model/training-export accepts anonymised tuples with schema validation + anti-PII smoke check (refuses tuples that still contain email or ORCID).",
+      },
+    ],
+  },
+  {
+    version: "v0.4.5",
+    date: "2026-05-18",
+    headline: "Math, public ledger URLs, citation gating",
+    items: [
+      {
+        tag: "ship",
+        text: "KaTeX math equations in the editor. Slash-menu form with live preview, $...$ and $$...$$ input rules, inline + display nodes that round-trip cleanly through HTML / LaTeX export.",
+      },
+      {
+        tag: "moat",
+        text: "Public ledger share URLs at /p/<shareKey>. Server-side ledger storage via pluggable backend — Vercel Blob in prod (auto-detected from BLOB_READ_WRITE_TOKEN), filesystem in dev. The page re-walks the chain server-side so visiting it IS the verification.",
+      },
+      {
+        tag: "moat",
+        text: "Citation gating across all agent modes — edit proposals and plan-mode steps run through /api/verify-proposal before the editor accepts them. Sources without an external match get tagged unverified in the ledger.",
+      },
+      {
+        tag: "polish",
+        text: "Reviewer-2 simulator overhauled: weight-aware rubric grade + structure boost + per-venue floor scores. Returns ForecastExplain breakdown.",
+      },
+      {
+        tag: "polish",
+        text: "Sample paper now ships with display math equations so KaTeX is visible on first visit.",
+      },
+    ],
+  },
+  {
     version: "v0.4.0",
     date: "2026-05-18",
     headline: "Moats come to life",

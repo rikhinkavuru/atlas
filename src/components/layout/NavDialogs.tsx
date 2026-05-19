@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, FileText, BookPlus, ChevronDown } from "lucide-react";
 import { useFocusTrap } from "@/lib/use-focus-trap";
 import { useAtlas, activePaper } from "@/lib/store";
+import type { CitationCandidate } from "@/types";
 import { listVenueTemplates, htmlToLaTeX } from "@/lib/latex";
 import type { LatexExportProvenance } from "@/lib/latex";
 import { cn } from "@/lib/cn";
@@ -220,6 +221,9 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
     "idle" | "checking" | "ok" | "unresolved" | "error"
   >("idle");
   const [verifyMessage, setVerifyMessage] = useState<string>("");
+  const [verifyCandidate, setVerifyCandidate] = useState<
+    import("@/types").CitationCandidate | null
+  >(null);
 
   // Verify the DOI/URL against /api/verify-citation before allowing the
   // user to insert. We don't block insertion of unresolved citations —
@@ -246,7 +250,7 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
       }
       const data = (await r.json()) as {
         resolved: boolean;
-        best?: { title?: string; confidence?: number; source?: string } | null;
+        best?: import("@/types").CitationCandidate | null;
         warning?: string;
       };
       if (data.resolved && data.best) {
@@ -254,15 +258,18 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
         setVerifyMessage(
           `${data.best.title?.slice(0, 80) ?? "Matched"} · via ${data.best.source}`,
         );
+        setVerifyCandidate(data.best);
       } else {
         setVerifyStatus("unresolved");
         setVerifyMessage(
           data.warning ?? "No high-confidence match in any registry.",
         );
+        setVerifyCandidate(null);
       }
     } catch (e) {
       setVerifyStatus("error");
       setVerifyMessage(e instanceof Error ? e.message : String(e));
+      setVerifyCandidate(null);
     }
   }
 
@@ -285,6 +292,23 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
         `<span class="citation" data-key="${escapeHtml(trimmed)}" data-url="${escapeHtml(url.trim())}" data-verified="${verifyStatus === "ok" ? "1" : "0"}">[${escapeHtml(trimmed)}]</span> `,
       )
       .run();
+    // Citation registry write — see SlashMenu.submitCitation for the
+    // matching write path. References generation reads from this registry.
+    const state = useAtlas.getState();
+    const tab = state.tabs.find((t) => t.id === state.activeTabId);
+    const paperId = tab?.paperId;
+    if (paperId) {
+      const cand: import("@/types").CitationCandidate = verifyCandidate ?? {
+        title: trimmed,
+        authors: [],
+        year: null,
+        doi: null,
+        url: url.trim(),
+        source: "manual",
+        confidence: 0,
+      };
+      state.registerCitation(paperId, trimmed, cand);
+    }
     onClose();
   }
 
@@ -316,6 +340,9 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
               onChange={(e) => {
                 setUrl(e.target.value);
                 setVerifyStatus("idle");
+                // Clear stale candidate so editing the URL after a verify
+                // doesn't accidentally register the old verified metadata.
+                setVerifyCandidate(null);
               }}
               onBlur={verify}
               placeholder="https://doi.org/…"

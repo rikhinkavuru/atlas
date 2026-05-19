@@ -147,6 +147,9 @@ export function SlashMenu({
     "idle" | "checking" | "ok" | "unresolved" | "error"
   >("idle");
   const [citeVerifyMsg, setCiteVerifyMsg] = useState<string>("");
+  const [citeCandidate, setCiteCandidate] = useState<
+    import("@/types").CitationCandidate | null
+  >(null);
   const ref = useRef<HTMLDivElement | null>(null);
   const formInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -300,11 +303,7 @@ export function SlashMenu({
       }
       const data = (await r.json()) as {
         resolved: boolean;
-        best?: {
-          title?: string;
-          confidence?: number;
-          source?: string;
-        } | null;
+        best?: import("@/types").CitationCandidate | null;
         warning?: string;
       };
       if (data.resolved && data.best) {
@@ -312,15 +311,18 @@ export function SlashMenu({
         setCiteVerifyMsg(
           `${(data.best.title ?? "Matched").slice(0, 80)} · via ${data.best.source}`,
         );
+        setCiteCandidate(data.best);
       } else {
         setCiteVerifyStatus("unresolved");
         setCiteVerifyMsg(
           data.warning ?? "No high-confidence match in any registry.",
         );
+        setCiteCandidate(null);
       }
     } catch (e) {
       setCiteVerifyStatus("error");
       setCiteVerifyMsg(e instanceof Error ? e.message : String(e));
+      setCiteCandidate(null);
     }
   }
 
@@ -335,6 +337,32 @@ export function SlashMenu({
         `<span class="citation" data-key="${escapeAttr(key)}" data-url="${escapeAttr(url)}" data-verified="${verified ? "1" : "0"}">[${escapeAttr(key)}]</span> `,
       )
       .run();
+    // Register what we know in the citation registry so the References
+    // generator can format this citation properly. When the verifier
+    // resolved a candidate we get full metadata (title / authors / year);
+    // otherwise we register a minimal stub the user can later enrich via
+    // the "Enrich missing" button in the References dialog.
+    const paperId = useAtlas.getState().activeTabId
+      ? useAtlas
+          .getState()
+          .papers[
+            useAtlas.getState().tabs.find(
+              (t) => t.id === useAtlas.getState().activeTabId,
+            )?.paperId ?? ""
+          ]?.id
+      : undefined;
+    if (paperId) {
+      const cand: import("@/types").CitationCandidate = citeCandidate ?? {
+        title: key,
+        authors: [],
+        year: null,
+        doi: null,
+        url,
+        source: "manual",
+        confidence: 0,
+      };
+      useAtlas.getState().registerCitation(paperId, key, cand);
+    }
     onClose();
   }
 
@@ -485,6 +513,10 @@ export function SlashMenu({
               onChange={(e) => {
                 setFormUrl(e.target.value);
                 setCiteVerifyStatus("idle");
+                // Clear stale candidate when URL changes — otherwise a user
+                // who verified, then edited the URL, would silently register
+                // metadata for the old URL.
+                setCiteCandidate(null);
               }}
               onBlur={verifyCitation}
               onKeyDown={(e) => {
