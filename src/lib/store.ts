@@ -31,6 +31,17 @@ interface Selection {
   to: number;
 }
 
+export interface CommentReply {
+  id: string;
+  /** Author display name at the moment the reply was posted. */
+  authorName: string;
+  /** Optional ORCID iD stamped from settings — same provenance flow as
+   *  the signed ledger so reviewers can tie replies to a real human. */
+  authorOrcid?: string;
+  text: string;
+  createdAt: number;
+}
+
 export interface Comment {
   id: string;
   paperId: string;
@@ -38,6 +49,10 @@ export interface Comment {
   text: string;
   createdAt: number;
   resolved: boolean;
+  /** Threaded replies. Local-only today; when real-time collab grows
+   *  past the cursor/presence MVP, these move into Liveblocks Storage
+   *  so peers see each other's replies live. The shape doesn't change. */
+  replies?: CommentReply[];
 }
 
 interface AtlasState {
@@ -84,6 +99,11 @@ interface AtlasState {
   addComment: (c: Comment) => void;
   resolveComment: (id: string) => void;
   deleteComment: (id: string) => void;
+  /** Append a reply to an existing comment. No-op when the comment id
+   *  isn't found (e.g. user deleted the parent mid-typing a reply). */
+  addCommentReply: (commentId: string, reply: CommentReply) => void;
+  /** Delete a reply by id. Useful for "undo my last reply" or moderation. */
+  deleteCommentReply: (commentId: string, replyId: string) => void;
 
   createReview: (rawText: string, items: ReviewerItem[], paperId?: string) => string;
   updateReviewItem: (
@@ -246,6 +266,25 @@ export const useAtlas = create<AtlasState>()(
     })),
   deleteComment: (id) =>
     set((s) => ({ comments: s.comments.filter((c) => c.id !== id) })),
+  addCommentReply: (commentId, reply) =>
+    set((s) => ({
+      comments: s.comments.map((c) =>
+        c.id === commentId
+          ? { ...c, replies: [...(c.replies ?? []), reply] }
+          : c,
+      ),
+    })),
+  deleteCommentReply: (commentId, replyId) =>
+    set((s) => ({
+      comments: s.comments.map((c) =>
+        c.id === commentId
+          ? {
+              ...c,
+              replies: (c.replies ?? []).filter((r) => r.id !== replyId),
+            }
+          : c,
+      ),
+    })),
 
   createReview: (rawText, items, paperId) => {
     const id = `r_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;

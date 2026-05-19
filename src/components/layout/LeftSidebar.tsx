@@ -23,6 +23,7 @@ import { ProvenanceTimeline } from "./ProvenanceTimeline";
 import { SpinePanel } from "./SpinePanel";
 import { SessionPanel } from "./SessionPanel";
 import type { DataBinding } from "@/types";
+import { useCollab } from "../collab/CollabProvider";
 
 // Stable empty-array sentinel so the zustand selector returns the same
 // reference whenever bindings[paperId] is undefined. Without this, every
@@ -229,56 +230,7 @@ export function LeftSidebar() {
               </div>
             )}
             {paperComments.map((c) => (
-              <div
-                key={c.id}
-                className={cn(
-                  "panel p-2.5 text-[11.5px] space-y-1.5",
-                  c.resolved && "opacity-55",
-                )}
-              >
-                <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-subtle flex items-center gap-1.5">
-                  <span>
-                    {new Date(c.createdAt).toLocaleString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                  {c.resolved && <span className="text-accent">resolved</span>}
-                </div>
-                <div
-                  onClick={() => {
-                    const el = document.querySelector(
-                      `[data-comment-id="${c.id}"]`,
-                    );
-                    el?.scrollIntoView({
-                      behavior: "smooth",
-                      block: "center",
-                    });
-                  }}
-                  className="text-muted italic line-clamp-2 cursor-pointer hover:text-foreground"
-                  title="Jump to passage"
-                >
-                  &ldquo;{c.quote}&rdquo;
-                </div>
-                <div className="text-foreground leading-relaxed">{c.text}</div>
-                <div className="flex items-center gap-1 pt-1">
-                  <button
-                    onClick={() => resolveComment(c.id)}
-                    className="btn btn-ghost h-6 text-[10.5px] text-muted"
-                  >
-                    <Check className="size-3" />
-                    {c.resolved ? "Reopen" : "Resolve"}
-                  </button>
-                  <button
-                    onClick={() => deleteComment(c.id)}
-                    className="btn btn-ghost h-6 text-[10.5px] text-muted ml-auto"
-                  >
-                    <Trash2 className="size-3" />
-                  </button>
-                </div>
-              </div>
+              <CommentCard key={c.id} comment={c} />
             ))}
           </div>
         )}
@@ -379,6 +331,188 @@ function LabFooterChip() {
         </div>
       </div>
     </button>
+  );
+}
+
+function CommentCard({ comment: c }: { comment: import("@/lib/store").Comment }) {
+  const resolveComment = useAtlas((s) => s.resolveComment);
+  const deleteComment = useAtlas((s) => s.deleteComment);
+  const addCommentReply = useAtlas((s) => s.addCommentReply);
+  const deleteCommentReply = useAtlas((s) => s.deleteCommentReply);
+  const authorName = useSettings((s) => s.authorName);
+  const authorOrcid = useSettings((s) => s.authorOrcid);
+  const collab = useCollab();
+  const [reply, setReply] = useState("");
+  const [showReplyForm, setShowReplyForm] = useState(false);
+  const replies = c.replies ?? [];
+
+  function postReply() {
+    const text = reply.trim();
+    if (!text) return;
+    // Stamp the author from settings (or the collab self-user when
+    // collab is on) so replies carry the same identity as ledger events.
+    const name =
+      authorName.trim() ||
+      (collab.enabled ? collab.selfUser.name : "You");
+    addCommentReply(c.id, {
+      id: `cr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      authorName: name,
+      authorOrcid: authorOrcid || undefined,
+      text,
+      createdAt: Date.now(),
+    });
+    setReply("");
+    setShowReplyForm(false);
+  }
+
+  return (
+    <div
+      className={cn(
+        "panel p-2.5 text-[11.5px] space-y-1.5",
+        c.resolved && "opacity-55",
+      )}
+    >
+      <div className="text-[10px] font-mono uppercase tracking-[0.12em] text-subtle flex items-center gap-1.5">
+        <span>
+          {new Date(c.createdAt).toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </span>
+        {c.resolved && <span className="text-accent">resolved</span>}
+        {replies.length > 0 && (
+          <span className="ml-auto text-subtle">
+            {replies.length} {replies.length === 1 ? "reply" : "replies"}
+          </span>
+        )}
+      </div>
+      <div
+        onClick={() => {
+          const el = document.querySelector(`[data-comment-id="${c.id}"]`);
+          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }}
+        className="text-muted italic line-clamp-2 cursor-pointer hover:text-foreground"
+        title="Jump to passage"
+      >
+        &ldquo;{c.quote}&rdquo;
+      </div>
+      <div className="text-foreground leading-relaxed">{c.text}</div>
+
+      {replies.length > 0 && (
+        <ul className="space-y-1 pl-2 border-l-2 border-border">
+          {replies.map((r) => (
+            <li key={r.id} className="text-[11px] leading-relaxed">
+              <div className="text-[9.5px] font-mono uppercase tracking-[0.12em] text-subtle flex items-center gap-1.5">
+                <span className="text-foreground">{r.authorName}</span>
+                {r.authorOrcid && (
+                  <a
+                    href={`https://orcid.org/${r.authorOrcid}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-accent normal-case tracking-normal"
+                  >
+                    iD {r.authorOrcid.slice(-4)}
+                  </a>
+                )}
+                <span className="ml-auto">
+                  {new Date(r.createdAt).toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <button
+                  onClick={() => deleteCommentReply(c.id, r.id)}
+                  aria-label="Delete reply"
+                  className="text-subtle hover:text-danger"
+                >
+                  <Trash2 className="size-2.5" />
+                </button>
+              </div>
+              <div className="text-foreground/90">{r.text}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {showReplyForm && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            postReply();
+          }}
+          className="space-y-1"
+        >
+          <textarea
+            autoFocus
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setShowReplyForm(false);
+                setReply("");
+              } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                postReply();
+              }
+            }}
+            placeholder="Reply…"
+            rows={2}
+            className="w-full bg-background border border-border rounded px-2 py-1 text-[12px] focus:outline-none focus:border-accent resize-none"
+          />
+          <div className="flex items-center gap-1 justify-end text-[10.5px] text-subtle font-mono">
+            <span className="mr-auto">
+              <span className="kbd">⌘</span>
+              <span className="kbd">↵</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setShowReplyForm(false);
+                setReply("");
+              }}
+              className="h-6 px-2 rounded text-muted hover:text-foreground hover:bg-surface-2"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!reply.trim()}
+              className="h-6 px-2 rounded bg-accent text-accent-fg disabled:opacity-40 text-[10.5px]"
+            >
+              Reply
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="flex items-center gap-1 pt-1">
+        <button
+          onClick={() => resolveComment(c.id)}
+          className="btn btn-ghost h-6 text-[10.5px] text-muted"
+        >
+          <Check className="size-3" />
+          {c.resolved ? "Reopen" : "Resolve"}
+        </button>
+        {!showReplyForm && (
+          <button
+            onClick={() => setShowReplyForm(true)}
+            className="btn btn-ghost h-6 text-[10.5px] text-muted"
+          >
+            <MessageSquare className="size-3" />
+            Reply
+          </button>
+        )}
+        <button
+          onClick={() => deleteComment(c.id)}
+          className="btn btn-ghost h-6 text-[10.5px] text-muted ml-auto"
+          aria-label="Delete comment"
+        >
+          <Trash2 className="size-3" />
+        </button>
+      </div>
+    </div>
   );
 }
 

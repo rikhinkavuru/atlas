@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from "react";
 
-import { Focus, Save, Loader2, Cpu } from "lucide-react";
+import { Focus, Save, Loader2, Cpu, History } from "lucide-react";
 import { useAtlas, activePaper } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 import { venueBudget } from "@/lib/venue-limits";
 import { VENUE_PRESETS } from "@/lib/rubrics";
+import { listSnapshots } from "@/lib/recovery";
 import { cn } from "@/lib/cn";
 
 export function StatusBar() {
@@ -127,6 +128,8 @@ export function StatusBar() {
       )}
 
       <div className="ml-auto flex items-center gap-2.5">
+        <SnapshotChip paperId={paper?.id} now={now} />
+
         {focusMode && (
           <button
             onClick={() => toggleFocusMode()}
@@ -154,6 +157,43 @@ export function StatusBar() {
         </button>
       </div>
     </div>
+  );
+}
+
+function SnapshotChip({
+  paperId,
+  now,
+}: {
+  paperId: string | undefined;
+  now: number;
+}) {
+  if (!paperId) return null;
+  const snapshots = listSnapshots(paperId);
+  if (snapshots.length === 0) return null;
+  // Newest snapshot at index 0; format its age relative to `now` so this
+  // chip refreshes on the same heartbeat as the saved-Xs-ago label.
+  const newestTs = Date.parse(snapshots[0].takenAt);
+  const ageS = Math.max(0, Math.floor((now - newestTs) / 1000));
+  const ageLabel =
+    ageS < 60
+      ? `${ageS}s`
+      : ageS < 3600
+        ? `${Math.floor(ageS / 60)}m`
+        : `${Math.floor(ageS / 3600)}h`;
+  return (
+    <button
+      onClick={() =>
+        window.dispatchEvent(new CustomEvent("atlas:open-recovery"))
+      }
+      className="flex items-center gap-1 hover:text-foreground transition-colors group"
+      title={`${snapshots.length} recovery snapshot${snapshots.length === 1 ? "" : "s"} · newest taken ${ageLabel} ago. Click to open the recovery dialog.`}
+    >
+      <History className="size-2.5 text-accent" />
+      <span className="tabular-nums">{snapshots.length}</span>
+      <span className="hidden lg:inline text-subtle/70 group-hover:text-muted">
+        · {ageLabel}
+      </span>
+    </button>
   );
 }
 

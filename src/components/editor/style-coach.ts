@@ -47,6 +47,13 @@ export const StyleCoach = Extension.create({
                       "data-style-rule": rule.id,
                       "data-style-message": rule.message(m[0]),
                       "data-style-fix": rule.fix(m[0]),
+                      // Stash absolute positions so the hover popover can
+                      // replace the *specific* matched span when the user
+                      // clicks Apply — without this, a doc-wide search by
+                      // matched text would rewrite the wrong instance when
+                      // the same phrase occurs multiple times.
+                      "data-style-from": String(from),
+                      "data-style-to": String(to),
                       title: `${rule.message(m[0])}${rule.fix(m[0]) ? ` → ${rule.fix(m[0])}` : ""}`,
                     }),
                   );

@@ -24,6 +24,7 @@ import {
 import { PdfImportZone } from "../import/PdfImportZone";
 import { WelcomeModal } from "../onboarding/WelcomeModal";
 import { OnboardingTour } from "../onboarding/OnboardingTour";
+import { StyleCoachPopover } from "../editor/StyleCoachPopover";
 import { NavDialogs } from "./NavDialogs";
 import { PublishLedgerDialog } from "./PublishLedgerDialog";
 import { ReferencesDialog } from "./ReferencesDialog";
@@ -182,6 +183,7 @@ function WorkspaceInner() {
       <PdfImportZone />
       <WelcomeModal />
       <OnboardingTour />
+      <StyleCoachPopover />
       <NavDialogs />
       <PublishLedgerDialog />
       <ReferencesDialog />
