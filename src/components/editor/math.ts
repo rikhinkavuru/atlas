@@ -119,6 +119,17 @@ export const BlockMath = Node.create({
         parseHTML: (el) => el.getAttribute("data-tex") ?? "",
         renderHTML: (attrs) => ({ "data-tex": attrs.tex }),
       },
+      // Optional label for cross-referencing. When set, the equation gets
+      // an auto-numbered "(N)" badge on the right side and LaTeX export
+      // promotes it from `\[ ... \]` to `\begin{equation}\label{}…
+      // \end{equation}`. Unlabeled equations stay unnumbered, matching
+      // standard LaTeX conventions.
+      label: {
+        default: "",
+        parseHTML: (el) => el.getAttribute("data-label") ?? "",
+        renderHTML: (attrs) =>
+          attrs.label ? { "data-label": String(attrs.label) } : {},
+      },
     };
   },
 
@@ -139,38 +150,106 @@ export const BlockMath = Node.create({
   addCommands() {
     return {
       insertBlockMath:
-        (tex: string) =>
+        (tex: string, label?: string) =>
         ({ commands }) =>
           commands.insertContent({
             type: this.name,
-            attrs: { tex },
+            attrs: { tex, label: label ?? "" },
           }),
     };
   },
 
   addNodeView() {
-    return ({ node }) => {
-      const dom = document.createElement("div");
-      dom.className = "math math-display";
-      dom.contentEditable = "false";
-      dom.dataset.mathKind = "display";
-      dom.dataset.tex = String(node.attrs.tex ?? "");
-      renderInto(dom, String(node.attrs.tex ?? ""), true);
+    return ({ node, editor, getPos }) => {
+      const wrap = document.createElement("div");
+      wrap.className = "math math-display";
+      wrap.contentEditable = "false";
+      wrap.dataset.mathKind = "display";
+      wrap.dataset.tex = String(node.attrs.tex ?? "");
+      if (node.attrs.label) wrap.dataset.label = String(node.attrs.label);
+
+      const body = document.createElement("span");
+      body.className = "math-display-body";
+      renderInto(body, String(node.attrs.tex ?? ""), true);
+
+      const tag = document.createElement("span");
+      tag.className = "math-display-tag";
+
+      const refresh = () => {
+        if (node.attrs.label) {
+          tag.textContent = `(${indexOfLabeledEquation(editor, getPos)})`;
+          tag.style.display = "";
+        } else {
+          tag.textContent = "";
+          tag.style.display = "none";
+        }
+      };
+      refresh();
+      wrap.appendChild(body);
+      wrap.appendChild(tag);
+
+      const onTx = ({
+        transaction,
+      }: {
+        transaction: { docChanged: boolean };
+      }) => {
+        if (transaction.docChanged) refresh();
+      };
+      editor.on("transaction", onTx);
+
       return {
-        dom,
+        dom: wrap,
         update(updated) {
           if (updated.type.name !== "blockMath") return false;
           const next = String(updated.attrs.tex ?? "");
-          if (dom.dataset.tex === next) return true;
-          dom.dataset.tex = next;
-          dom.innerHTML = "";
-          renderInto(dom, next, true);
+          const prev = wrap.dataset.tex ?? "";
+          if (next !== prev) {
+            wrap.dataset.tex = next;
+            body.innerHTML = "";
+            renderInto(body, next, true);
+          }
+          if (updated.attrs.label) {
+            wrap.dataset.label = String(updated.attrs.label);
+          } else {
+            delete wrap.dataset.label;
+          }
+          refresh();
           return true;
+        },
+        destroy() {
+          editor.off("transaction", onTx);
         },
       };
     };
   },
 });
+
+/** 1-based index of THIS labeled equation among all labeled display-math
+ *  nodes in the document, by position. Unlabeled equations don't count. */
+function indexOfLabeledEquation(
+  editor: {
+    state: { doc: { descendants: (fn: (node: any, pos: number) => boolean | void) => void } };
+  },
+  getPos: (() => number | undefined) | boolean | undefined,
+): number {
+  if (typeof getPos !== "function") return 1;
+  const target = getPos();
+  if (typeof target !== "number") return 1;
+  let n = 0;
+  editor.state.doc.descendants(
+    (node: { type: { name: string }; attrs?: Record<string, unknown> }, pos: number) => {
+      if (
+        node.type.name === "blockMath" &&
+        String(node.attrs?.label ?? "").trim()
+      ) {
+        n++;
+        if (pos === target) return false;
+      }
+      return true;
+    },
+  );
+  return Math.max(1, n);
+}
 
 // Convenience: parse markdown-style math from plain text. Used by the input
 // rule + slash menu so users can type `$x^2$` and have it become an InlineMath

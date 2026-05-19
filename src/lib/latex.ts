@@ -100,8 +100,21 @@ export function htmlToLaTeX(
   // this before the generic tag stripper keeps the LaTeX intact.
   let body = html
     .replace(
-      /<div class="math math-display"\s+data-tex="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi,
-      (_m, t) => `\n\\[${decodeAttr(t)}\\]\n`,
+      /<div class="math math-display"([^>]*)>[\s\S]*?<\/div>/gi,
+      (_m, attrs: string) => {
+        const texMatch = /data-tex="([^"]*)"/.exec(attrs);
+        const labelMatch = /data-label="([^"]*)"/.exec(attrs);
+        const tex = decodeAttr(texMatch?.[1] ?? "");
+        if (!tex) return "";
+        const label = (labelMatch?.[1] ?? "").replace(/[^A-Za-z0-9_:\-]/g, "");
+        // Labeled display-math is promoted to a numbered \begin{equation}
+        // block so \ref{eq:foo} resolves to the right "(N)" number.
+        // Unlabeled stays unnumbered with \[ … \].
+        if (label) {
+          return `\n\\begin{equation}\\label{${label}}\n${tex}\n\\end{equation}\n`;
+        }
+        return `\n\\[${tex}\\]\n`;
+      },
     )
     .replace(
       /<span class="math math-inline"\s+data-tex="([^"]*)"[^>]*>[\s\S]*?<\/span>/gi,
@@ -204,9 +217,20 @@ export function htmlToLaTeX(
       return ` \\cite{${slugifyKey(key)}} `;
     })
     .replace(/<span class="comment-mark"[^>]*>([\s\S]*?)<\/span>/gi, "$1")
-    .replace(/<h1[^>]*>([\s\S]*?)<\/h1>/gi, (_m, t) => `\\title{${tex(t)}}\n`)
-    .replace(/<h2[^>]*>([\s\S]*?)<\/h2>/gi, (_m, t) => `\\section{${tex(t)}}\n`)
-    .replace(/<h3[^>]*>([\s\S]*?)<\/h3>/gi, (_m, t) => `\\subsection{${tex(t)}}\n`)
+    // Heading rewrites — capture optional `data-label` attr and emit
+    // `\label{…}` after the section command so cross-refs resolve. h1 is
+    // conventionally the paper title in our editor (kept inside the doc);
+    // we don't re-emit \title here because the wrapping header logic does
+    // that — just drop it from the body so we don't duplicate it.
+    .replace(/<h1[^>]*>[\s\S]*?<\/h1>/gi, () => "")
+    .replace(/<h2([^>]*)>([\s\S]*?)<\/h2>/gi, (_m, attrs: string, t: string) => {
+      const label = labelFromAttrs(attrs);
+      return `\\section{${tex(t)}}${label ? `\\label{${label}}` : ""}\n`;
+    })
+    .replace(/<h3([^>]*)>([\s\S]*?)<\/h3>/gi, (_m, attrs: string, t: string) => {
+      const label = labelFromAttrs(attrs);
+      return `\\subsection{${tex(t)}}${label ? `\\label{${label}}` : ""}\n`;
+    })
     .replace(/<strong>([\s\S]*?)<\/strong>/gi, "\\textbf{$1}")
     .replace(/<b>([\s\S]*?)<\/b>/gi, "\\textbf{$1}")
     .replace(/<em>([\s\S]*?)<\/em>/gi, "\\emph{$1}")
@@ -329,6 +353,15 @@ function extractAttr(html: string, name: string): string | null {
  * characters; embedded paragraph / list / span markup is reduced via
  * stripTags.
  */
+/** Extract a sanitised label attribute value from a raw HTML attribute
+ *  string. Returns "" when no `data-label` is present or it doesn't survive
+ *  the slug allow-list. */
+function labelFromAttrs(attrs: string): string {
+  const m = /data-label="([^"]*)"/.exec(attrs);
+  if (!m) return "";
+  return m[1].replace(/[^A-Za-z0-9_:\-]/g, "");
+}
+
 function htmlTableToTabular(html: string): string {
   // Pull every <tr>…</tr> in order. We handle both <th> and <td> cells.
   const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) ?? [];

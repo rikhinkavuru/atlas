@@ -385,11 +385,33 @@ body {
   margin: 0 1px;
 }
 .tiptap .math.math-display {
-  display: block;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
   margin: 1.2rem 0;
   padding: 0.5rem 0.75rem;
-  text-align: center;
   border-radius: 6px;
+}
+.tiptap .math.math-display .math-display-body {
+  grid-column: 1;
+  justify-self: center;
+  text-align: center;
+}
+.tiptap .math.math-display .math-display-tag {
+  grid-column: 2;
+  font-family: var(--font-sans);
+  font-size: 0.9em;
+  color: var(--muted);
+  padding-left: 1rem;
+  user-select: none;
+  tabular-nums: 1;
+}
+/* Older serialised display-math without the body/tag wrappers (pre-S/T
+   schema) still flows correctly under the grid by spanning both columns. */
+.tiptap .math.math-display > .katex-display,
+.tiptap .math.math-display > .katex {
+  grid-column: 1 / -1;
+  justify-self: center;
 }
 .tiptap .math.math-display:hover {
   background: color-mix(in srgb, var(--accent) 6%, transparent);

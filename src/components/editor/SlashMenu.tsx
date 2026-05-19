@@ -176,6 +176,7 @@ export function SlashMenu({
   const [formUrl, setFormUrl] = useState("");
   const [mathTex, setMathTex] = useState("");
   const [mathKind, setMathKind] = useState<"inline" | "display">("display");
+  const [mathLabel, setMathLabel] = useState("");
   const mathPreviewRef = useRef<HTMLSpanElement | null>(null);
   const [citeVerifyStatus, setCiteVerifyStatus] = useState<
     "idle" | "checking" | "ok" | "unresolved" | "error"
@@ -340,12 +341,16 @@ export function SlashMenu({
       onClose();
       return;
     }
+    const label = mathLabel.trim();
     editor
       .chain()
       .focus()
       .insertContent({
         type: mathKind === "inline" ? "inlineMath" : "blockMath",
-        attrs: { tex },
+        attrs:
+          mathKind === "display"
+            ? { tex, label: label || "" }
+            : { tex },
       })
       .run();
     onClose();
@@ -759,6 +764,14 @@ export function SlashMenu({
           <div className="border border-border rounded bg-surface-2/40 px-3 py-2 min-h-[44px] flex items-center justify-center overflow-x-auto">
             <span ref={mathPreviewRef} className="text-foreground" />
           </div>
+          {mathKind === "display" && (
+            <input
+              value={mathLabel}
+              onChange={(e) => setMathLabel(e.target.value)}
+              placeholder="Label for cross-ref (optional, e.g. eq:loss)"
+              className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] font-mono focus:outline-none focus:border-accent"
+            />
+          )}
           <div className="flex items-center justify-between gap-1.5">
             <span className="text-[10px] text-subtle font-mono">
               <span className="kbd">⌘</span>

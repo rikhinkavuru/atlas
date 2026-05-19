@@ -30,19 +30,28 @@ declare module "@tiptap/core" {
 }
 
 export interface XRefTarget {
-  /** Label as written by the user (e.g. "fig:overview"). */
+  /** Label as written by the user (e.g. "fig:overview", "sec:method"). */
   label: string;
-  /** "figure" | "table" — drives the prefix shown by the xref. */
-  kind: "figure" | "table";
-  /** 1-based number in document order, per-kind. */
-  number: number;
+  /** Drives the prefix and number format shown by the xref. */
+  kind: "figure" | "table" | "section" | "equation";
+  /** For figure/table/equation: 1-based document order.
+   *  For section: hierarchical "1.2.3" derived from h1/h2/h3 depth. */
+  number: string;
 }
 
 /**
- * Walk the editor doc once and collect every labeled figure / table-caption
- * node. Returned in document order, with per-kind 1-based numbering. The
- * xref NodeView calls this on every transaction; for typical paper-sized
- * docs (a few dozen figures + tables) this is cheap.
+ * Walk the editor doc once and collect every labeled figure, table-caption,
+ * heading, and labeled display-math node. Returned in document order, with
+ * per-kind numbering.
+ *
+ * Section numbering tracks the heading hierarchy: a new h1 resets h2/h3
+ * counters, a new h2 resets h3. Unlabeled headings still increment the
+ * counters so the numbering reflects what readers see in the rendered
+ * document.
+ *
+ * Equation numbering counts only labeled display-math; unlabeled equations
+ * are not numbered (matches LaTeX's `\[ ... \]` vs `\begin{equation}`
+ * distinction).
  */
 export function collectXRefTargets(
   doc: { descendants: (fn: (node: any, pos: number) => boolean | void) => void },
@@ -50,23 +59,69 @@ export function collectXRefTargets(
   const out: XRefTarget[] = [];
   let figureIdx = 0;
   let tableIdx = 0;
-  doc.descendants((node: { type: { name: string }; attrs?: Record<string, unknown> }) => {
-    if (node.type.name === "figure") {
-      figureIdx++;
-      const label = String(node.attrs?.label ?? "").trim();
-      if (label) out.push({ label, kind: "figure", number: figureIdx });
-    } else if (node.type.name === "tableCaption") {
-      tableIdx++;
-      const label = String(node.attrs?.label ?? "").trim();
-      if (label) out.push({ label, kind: "table", number: tableIdx });
-    }
-    return true;
-  });
+  let equationIdx = 0;
+  let h1 = 0,
+    h2 = 0,
+    h3 = 0;
+  doc.descendants(
+    (node: {
+      type: { name: string };
+      attrs?: Record<string, unknown>;
+    }) => {
+      if (node.type.name === "figure") {
+        figureIdx++;
+        const label = String(node.attrs?.label ?? "").trim();
+        if (label)
+          out.push({ label, kind: "figure", number: String(figureIdx) });
+      } else if (node.type.name === "tableCaption") {
+        tableIdx++;
+        const label = String(node.attrs?.label ?? "").trim();
+        if (label)
+          out.push({ label, kind: "table", number: String(tableIdx) });
+      } else if (node.type.name === "heading") {
+        const level = Number(node.attrs?.level ?? 1);
+        if (level <= 1) {
+          h1++;
+          h2 = 0;
+          h3 = 0;
+        } else if (level === 2) {
+          h2++;
+          h3 = 0;
+        } else {
+          h3++;
+        }
+        const label = String(node.attrs?.label ?? "").trim();
+        if (label) {
+          const num =
+            level <= 1
+              ? `${h1}`
+              : level === 2
+                ? `${h1}.${h2}`
+                : `${h1}.${h2}.${h3}`;
+          out.push({ label, kind: "section", number: num });
+        }
+      } else if (node.type.name === "blockMath") {
+        const label = String(node.attrs?.label ?? "").trim();
+        if (label) {
+          equationIdx++;
+          out.push({
+            label,
+            kind: "equation",
+            number: String(equationIdx),
+          });
+        }
+      }
+      return true;
+    },
+  );
   return out;
 }
 
 function prefixFor(kind: XRefTarget["kind"]): string {
-  return kind === "table" ? "Table" : "Figure";
+  if (kind === "table") return "Table";
+  if (kind === "section") return "§";
+  if (kind === "equation") return "Eq.";
+  return "Figure";
 }
 
 export const XRef = Node.create({
@@ -134,7 +189,11 @@ export const XRef = Node.create({
         }
         dom.classList.remove("atlas-xref-dead");
         const t = matches[0];
-        return `${prefixFor(t.kind)} ${t.number}`;
+        // "§1.2" — no separator. "Figure 3", "Table 2", "Eq. 4" — space.
+        const sep = t.kind === "section" ? "" : " ";
+        const num =
+          t.kind === "equation" ? `(${t.number})` : t.number;
+        return `${prefixFor(t.kind)}${sep}${num}`;
       }
 
       dom.textContent = resolve();

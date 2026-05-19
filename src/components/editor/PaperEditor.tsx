@@ -34,6 +34,7 @@ import { MathInputRules } from "./math-input-rules";
 import { Figure } from "./figure";
 import { TableCaption } from "./table-caption";
 import { XRef } from "./xref";
+import { HeadingLabels } from "./heading-labels";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import "katex/dist/katex.min.css";
@@ -159,6 +160,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       Figure,
       TableCaption,
       XRef,
+      HeadingLabels,
       // Markdown-style math input rules: $$...$$ → block, $...$ → inline.
       // Fires when the user types the closing delimiter.
       MathInputRules,
