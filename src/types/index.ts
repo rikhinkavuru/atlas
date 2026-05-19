@@ -97,7 +97,7 @@ export interface CitationCandidate {
   year: number | null;
   doi: string | null;
   url: string;
-  source: "crossref" | "openalex" | "semanticscholar" | "arxiv" | "nia";
+  source: "crossref" | "openalex" | "semanticscholar" | "arxiv" | "nia" | "manual";
   confidence: number;
   snippet?: string;
 }
@@ -118,6 +118,11 @@ export interface EditPlanStep {
   why: string;
   draft: string;
   status?: "pending" | "applied" | "skipped";
+  /** Citations the model claims as evidence for this step's draft. Set by
+   *  the agent in cite-aware plans; populated/checked by /api/verify-proposal. */
+  sources?: ProposalSource[];
+  /** Per-step unsupported-claim labels, mirroring EditProposal's shape. */
+  unsupportedClaims?: string[];
 }
 
 export interface EditPlan {
@@ -264,6 +269,31 @@ export interface DataBinding {
   };
   lastSeenHash?: string;
   notes?: string;
+}
+
+/**
+ * An author commit — keystroke-level edits coalesced into a single record
+ * once the author pauses for ~30s or commits a >50-char change. Distinct
+ * from ProvenanceEvent: those record AI / import / cite actions that need
+ * cryptographic provenance; author edits are tracked locally for
+ * track-changes UI but don't go in the signed chain.
+ *
+ * When real collaborative editing ships (Yjs/Liveblocks), each peer's
+ * commits land here with their own actorId — the schema doesn't change.
+ */
+export interface AuthorEdit {
+  id: string;
+  paperId: string;
+  timestamp: number;
+  /** Stable identifier for the human author. "self" until multi-user lands. */
+  actorId: string;
+  actorLabel: string;
+  /** Net word change since the previous commit. Positive = added. */
+  wordsDelta: number;
+  /** Net character change since the previous commit. */
+  charsDelta: number;
+  /** Short snippet of the content state at commit time (200 chars). */
+  snippet: string;
 }
 
 export interface SubmissionForecast {

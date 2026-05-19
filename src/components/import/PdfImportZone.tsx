@@ -6,10 +6,22 @@ import { FileText, Loader2, Upload, X } from "lucide-react";
 import { useAtlas } from "@/lib/store";
 import { extractPdf } from "@/lib/pdf";
 
+interface ImportSummary {
+  fileName: string;
+  title: string;
+  pages: number;
+  blocks: number;
+  headings: number;
+  columns: 1 | 2;
+  mathFragments: number;
+  droppedHeaderFooter: number;
+}
+
 export function PdfImportZone() {
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [summary, setSummary] = useState<ImportSummary | null>(null);
   const dragCounter = useRef(0);
   const newPaper = useAtlas((s) => s.newPaper);
   const updatePaper = useAtlas((s) => s.updatePaper);
@@ -34,6 +46,16 @@ export function PdfImportZone() {
               t.paperId === id ? { ...t, title: result.title } : t,
             ),
           }));
+          setSummary({
+            fileName: file.name,
+            title: result.title,
+            pages: result.pages,
+            blocks: result.stats.blocks,
+            headings: result.stats.headings,
+            columns: result.stats.columns,
+            mathFragments: result.stats.mathFragments,
+            droppedHeaderFooter: result.stats.droppedHeaderFooter,
+          });
         } catch (e) {
           setError(
             `Failed to import ${file.name}: ${e instanceof Error ? e.message : String(e)}`,
@@ -98,7 +120,7 @@ export function PdfImportZone() {
 
   return (
     <AnimatePresence>
-      {(dragging || busy || error) && (
+      {(dragging || busy || error || summary) && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -146,6 +168,52 @@ export function PdfImportZone() {
               >
                 <X className="size-3.5" />
               </button>
+            </div>
+          )}
+          {summary && !busy && !error && (
+            <div className="pointer-events-auto panel px-4 py-3 shadow-2xl rounded-xl max-w-md absolute bottom-6 right-6 space-y-2">
+              <div className="flex items-start gap-2">
+                <FileText className="size-4 text-accent mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[12px] font-medium text-foreground truncate">
+                    Imported · {summary.title}
+                  </div>
+                  <div className="text-[10.5px] text-subtle font-mono mt-0.5">
+                    {summary.pages} pages · {summary.blocks} blocks ·{" "}
+                    {summary.headings} headings · {summary.columns}-col
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSummary(null)}
+                  className="size-5 flex items-center justify-center text-subtle hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+              {(summary.mathFragments > 0 ||
+                summary.droppedHeaderFooter > 0) && (
+                <div className="text-[10.5px] text-muted leading-relaxed border-t border-border pt-2 space-y-0.5">
+                  {summary.mathFragments > 0 && (
+                    <div>
+                      <span className="text-warning font-mono">
+                        {summary.mathFragments}
+                      </span>{" "}
+                      math fragment{summary.mathFragments === 1 ? "" : "s"}{" "}
+                      wrapped — PDF math isn&apos;t reliably decompilable to
+                      LaTeX; review and re-enter.
+                    </div>
+                  )}
+                  {summary.droppedHeaderFooter > 0 && (
+                    <div>
+                      Dropped{" "}
+                      <span className="font-mono">
+                        {summary.droppedHeaderFooter}
+                      </span>{" "}
+                      page-header/footer fragments.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </motion.div>

@@ -36,6 +36,58 @@ import { createBinding } from "@/lib/binding";
 import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/cn";
+
+// Last-seen char count per paper. Drives the wordsDelta/charsDelta in author
+// edit log entries — diffing the current paper against the previous keystroke
+// gives us a cheap "this commit was +N chars" signal without instrumenting
+// every change descriptor through Tiptap.
+//
+// IMPORTANT: must be seeded with the paper's current state when the editor
+// mounts, BEFORE any onUpdate fires. Otherwise the first edit on an opened
+// paper logs +<entire-doc-length> as the delta. seedLastSeen() handles this.
+const lastSeen = new Map<string, { chars: number; words: number; html: string }>();
+
+function seedLastSeen(paperId: string, html: string) {
+  if (lastSeen.has(paperId)) return;
+  lastSeen.set(paperId, { ...plainTextLen(html), html });
+}
+
+function plainTextLen(html: string): { chars: number; words: number } {
+  if (typeof window === "undefined") return { chars: 0, words: 0 };
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  const text = (tmp.textContent ?? "").trim();
+  return {
+    chars: text.length,
+    words: text.length === 0 ? 0 : text.split(/\s+/).length,
+  };
+}
+
+function recordEditPulse(paperId: string, html: string) {
+  const stats = plainTextLen(html);
+  const prev = lastSeen.get(paperId) ?? { chars: 0, words: 0, html: "" };
+  // Skip if nothing materially changed — Tiptap fires onUpdate even on
+  // selection-only changes occasionally.
+  if (stats.chars === prev.chars && stats.words === prev.words) return;
+  const wordsDelta = stats.words - prev.words;
+  const charsDelta = stats.chars - prev.chars;
+  // Ignore tiny pure-whitespace fluctuations (paste/cleanup) — they're noise.
+  if (Math.abs(charsDelta) < 1 && Math.abs(wordsDelta) === 0) {
+    lastSeen.set(paperId, { ...stats, html });
+    return;
+  }
+  useAtlas.getState().recordAuthorEdit({
+    id: `a_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    paperId,
+    timestamp: Date.now(),
+    actorId: "self",
+    actorLabel: "You",
+    wordsDelta,
+    charsDelta,
+    snippet: html.slice(0, 200).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
+  });
+  lastSeen.set(paperId, { ...stats, html });
+}
 import type { Tab } from "@/types";
 import { SlashMenu } from "./SlashMenu";
 
@@ -117,7 +169,11 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     },
     onUpdate({ editor }) {
       if (!tab.paperId) return;
-      updatePaper(tab.paperId, editor.getHTML());
+      const html = editor.getHTML();
+      updatePaper(tab.paperId, html);
+      // Track-changes pulse — coalesced server-side via recordAuthorEdit so
+      // typing a sentence becomes one log entry, not one per keystroke.
+      recordEditPulse(tab.paperId, html);
     },
     onSelectionUpdate({ editor }) {
       const { from, to, empty } = editor.state.selection;
@@ -148,6 +204,16 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       delete (window as unknown as { __atlasEditor?: typeof editor }).__atlasEditor;
     };
   }, [editor]);
+
+  // Seed the per-paper baseline for the track-changes pulse the moment we
+  // know which paper this editor instance is for. Without this, the first
+  // keystroke on an opened paper would record a delta equal to the full
+  // document length.
+  useEffect(() => {
+    if (tab.paperId && paper) {
+      seedLastSeen(tab.paperId, paper.html);
+    }
+  }, [tab.paperId, paper]);
 
   // Command palette → math: open the slash menu's math form at the cursor.
   useEffect(() => {

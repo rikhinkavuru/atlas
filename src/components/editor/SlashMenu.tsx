@@ -143,6 +143,10 @@ export function SlashMenu({
   const [mathTex, setMathTex] = useState("");
   const [mathKind, setMathKind] = useState<"inline" | "display">("display");
   const mathPreviewRef = useRef<HTMLSpanElement | null>(null);
+  const [citeVerifyStatus, setCiteVerifyStatus] = useState<
+    "idle" | "checking" | "ok" | "unresolved" | "error"
+  >("idle");
+  const [citeVerifyMsg, setCiteVerifyMsg] = useState<string>("");
   const ref = useRef<HTMLDivElement | null>(null);
   const formInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -271,14 +275,64 @@ export function SlashMenu({
     }
   }, [mathTex, mathKind, inlineForm]);
 
+  // Verify the URL/DOI against /api/verify-citation. Same UX as
+  // NavDialogs.CitationDialog — verification is non-blocking (researchers
+  // need to cite in-progress refs sometimes), but the resulting chip carries
+  // data-verified so downstream UI knows the citation's trust state.
+  async function verifyCitation() {
+    const q = formUrl.trim() || formKey.trim();
+    if (!q) {
+      setCiteVerifyStatus("idle");
+      return;
+    }
+    setCiteVerifyStatus("checking");
+    setCiteVerifyMsg("");
+    try {
+      const r = await fetch("/api/verify-citation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      if (!r.ok) {
+        setCiteVerifyStatus("error");
+        setCiteVerifyMsg(`verifier returned ${r.status}`);
+        return;
+      }
+      const data = (await r.json()) as {
+        resolved: boolean;
+        best?: {
+          title?: string;
+          confidence?: number;
+          source?: string;
+        } | null;
+        warning?: string;
+      };
+      if (data.resolved && data.best) {
+        setCiteVerifyStatus("ok");
+        setCiteVerifyMsg(
+          `${(data.best.title ?? "Matched").slice(0, 80)} · via ${data.best.source}`,
+        );
+      } else {
+        setCiteVerifyStatus("unresolved");
+        setCiteVerifyMsg(
+          data.warning ?? "No high-confidence match in any registry.",
+        );
+      }
+    } catch (e) {
+      setCiteVerifyStatus("error");
+      setCiteVerifyMsg(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   function submitCitation() {
     const key = formKey.trim() || "ref";
     const url = formUrl.trim();
+    const verified = citeVerifyStatus === "ok";
     editor
       .chain()
       .focus()
       .insertContent(
-        `<span class="citation" data-key="${escapeAttr(key)}" data-url="${escapeAttr(url)}">[${escapeAttr(key)}]</span> `,
+        `<span class="citation" data-key="${escapeAttr(key)}" data-url="${escapeAttr(url)}" data-verified="${verified ? "1" : "0"}">[${escapeAttr(key)}]</span> `,
       )
       .run();
     onClose();
@@ -425,19 +479,60 @@ export function SlashMenu({
             placeholder="Citation key (e.g., Smith2024)"
             className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] focus:outline-none focus:border-accent"
           />
-          <input
-            value={formUrl}
-            onChange={(e) => setFormUrl(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.preventDefault();
-                onClose();
-              }
-            }}
-            type="url"
-            placeholder="URL or DOI (optional)"
-            className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] focus:outline-none focus:border-accent"
-          />
+          <div className="flex items-center gap-1.5">
+            <input
+              value={formUrl}
+              onChange={(e) => {
+                setFormUrl(e.target.value);
+                setCiteVerifyStatus("idle");
+              }}
+              onBlur={verifyCitation}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.preventDefault();
+                  onClose();
+                }
+              }}
+              type="url"
+              placeholder="URL or DOI (optional)"
+              className="flex-1 bg-background border border-border rounded px-2 h-7 text-[12px] focus:outline-none focus:border-accent"
+            />
+            <button
+              type="button"
+              onClick={verifyCitation}
+              disabled={citeVerifyStatus === "checking"}
+              className="h-7 px-2 rounded text-[10.5px] border border-border text-muted hover:text-foreground hover:bg-surface-2 disabled:opacity-50"
+              title="Check this against CrossRef / OpenAlex / Semantic Scholar / Nia"
+            >
+              Verify
+            </button>
+          </div>
+          {citeVerifyStatus !== "idle" && (
+            <div
+              className={cn(
+                "text-[10.5px] rounded px-1.5 py-1 border flex items-start gap-1.5 leading-snug",
+                citeVerifyStatus === "ok" &&
+                  "border-accent/30 bg-accent-soft/40 text-accent",
+                citeVerifyStatus === "unresolved" &&
+                  "border-warning/40 bg-warning/5 text-warning",
+                citeVerifyStatus === "error" &&
+                  "border-warning/40 bg-warning/5 text-warning",
+                citeVerifyStatus === "checking" &&
+                  "border-border bg-surface-2/40 text-subtle",
+              )}
+            >
+              <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] pt-0.5 shrink-0">
+                {citeVerifyStatus === "ok"
+                  ? "verified"
+                  : citeVerifyStatus === "unresolved"
+                    ? "no match"
+                    : citeVerifyStatus === "error"
+                      ? "error"
+                      : "checking…"}
+              </span>
+              <span className="flex-1">{citeVerifyMsg || "—"}</span>
+            </div>
+          )}
           <div className="flex items-center justify-end gap-1.5 pt-0.5">
             <button
               type="button"
@@ -450,7 +545,7 @@ export function SlashMenu({
               type="submit"
               className="h-7 px-2 rounded text-[11px] bg-accent text-accent-fg"
             >
-              Insert
+              {citeVerifyStatus === "unresolved" ? "Insert anyway" : "Insert"}
             </button>
           </div>
         </form>

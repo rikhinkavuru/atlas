@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Network,
   GitFork,
+  History,
 } from "lucide-react";
 import { useAtlas, activePaper } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
@@ -20,6 +21,7 @@ import { cn } from "@/lib/cn";
 import { useEffect, useState } from "react";
 import { ProvenanceTimeline } from "./ProvenanceTimeline";
 import { SpinePanel } from "./SpinePanel";
+import { SessionPanel } from "./SessionPanel";
 import type { DataBinding } from "@/types";
 
 // Stable empty-array sentinel so the zustand selector returns the same
@@ -41,7 +43,7 @@ export function LeftSidebar() {
   const deleteComment = useAtlas((s) => s.deleteComment);
   const toggleSettings = useAtlas((s) => s.toggleSettings);
   const [section, setSection] = useState<
-    "files" | "outline" | "comments" | "ledger" | "spine"
+    "files" | "outline" | "comments" | "ledger" | "spine" | "session"
   >("outline");
   const ledger = useAtlas((s) =>
     paper ? s.ledgers[paper.id] : undefined,
@@ -52,6 +54,9 @@ export function LeftSidebar() {
   const staleCount = bindings.filter(
     (b) => b.status === "stale" || b.status === "missing",
   ).length;
+  const editCount = useAtlas((s) =>
+    paper ? (s.authorEdits[paper.id]?.length ?? 0) : 0,
+  );
 
   const [outline, setOutline] = useState<Heading[]>([]);
   useEffect(() => {
@@ -104,6 +109,13 @@ export function LeftSidebar() {
           icon={<GitFork className="size-3.5" />}
           label="Spine"
           badge={staleCount || undefined}
+        />
+        <SidebarTab
+          active={section === "session"}
+          onClick={() => setSection("session")}
+          icon={<History className="size-3.5" />}
+          label="Track changes"
+          badge={editCount || undefined}
         />
       </div>
 
@@ -200,6 +212,7 @@ export function LeftSidebar() {
 
         {section === "ledger" && <ProvenanceTimeline />}
         {section === "spine" && <SpinePanel />}
+        {section === "session" && <SessionPanel />}
 
         {section === "comments" && (
           <div className="p-2 space-y-2">

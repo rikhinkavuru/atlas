@@ -6,6 +6,8 @@ import { SAMPLE_PAPER_HTML } from "./sample-paper";
 import type {
   AgentMessage,
   AnalysisReport,
+  AuthorEdit,
+  CitationCandidate,
   DataBinding,
   EditProposal,
   Paper,
@@ -57,6 +59,13 @@ interface AtlasState {
   ledgers: Record<string, ProvenanceLedger>;
   forecasts: Record<string, SubmissionForecast>;
   bindings: Record<string, DataBinding[]>;
+  /** Author edit log per paper. Append-only; persisted; capped at 200 events
+   * per paper so the local storage doesn't blow up over months of drafting. */
+  authorEdits: Record<string, AuthorEdit[]>;
+  /** Per-paper citation registry — every citation candidate that's been
+   * inserted into the paper, indexed by the citation key. Drives the
+   * "Generate references" flow + bibliography format export. */
+  citations: Record<string, Record<string, CitationCandidate>>;
 
   setActiveTab: (id: string) => void;
   openTab: (tab: Tab) => void;
@@ -109,6 +118,13 @@ interface AtlasState {
 
   setAnalysis: (r: AnalysisReport | null) => void;
   setAnalysisBusy: (b: boolean) => void;
+  /** Record (or coalesce) an author commit. See updatePaper for trigger logic. */
+  recordAuthorEdit: (edit: AuthorEdit) => void;
+  /** Read-only convenience: the last commit timestamp for a paper. */
+  lastAuthorEditAt: (paperId: string) => number | undefined;
+  /** Add a citation to the registry for a paper. Keyed by citation key (e.g.
+   * "Smith2024") so re-inserting the same key updates the stored metadata. */
+  registerCitation: (paperId: string, key: string, c: CitationCandidate) => void;
 }
 
 const PAPER_ID = "p_atlas_rag";
@@ -153,6 +169,8 @@ export const useAtlas = create<AtlasState>()(
   ledgers: {},
   forecasts: {},
   bindings: {},
+  authorEdits: {},
+  citations: {},
   agentMessages: [WELCOME_MESSAGE],
   agentBusy: false,
   selection: null,
@@ -373,6 +391,45 @@ export const useAtlas = create<AtlasState>()(
 
   setAnalysis: (analysis) => set({ analysis }),
   setAnalysisBusy: (analysisBusy) => set({ analysisBusy }),
+  recordAuthorEdit: (edit) =>
+    set((s) => {
+      const prev = s.authorEdits[edit.paperId] ?? [];
+      // Coalesce: if the last edit is by the same actor within 30s, merge.
+      const last = prev[prev.length - 1];
+      const isCoalescable =
+        last &&
+        last.actorId === edit.actorId &&
+        edit.timestamp - last.timestamp < 30_000;
+      const next = isCoalescable
+        ? [
+            ...prev.slice(0, -1),
+            {
+              ...last,
+              timestamp: edit.timestamp,
+              wordsDelta: last.wordsDelta + edit.wordsDelta,
+              charsDelta: last.charsDelta + edit.charsDelta,
+              snippet: edit.snippet,
+            },
+          ]
+        : [...prev, edit];
+      // Cap at 200 entries per paper.
+      const capped = next.length > 200 ? next.slice(-200) : next;
+      return { authorEdits: { ...s.authorEdits, [edit.paperId]: capped } };
+    }),
+  lastAuthorEditAt: (paperId) => {
+    const list = get().authorEdits[paperId];
+    return list && list.length > 0 ? list[list.length - 1].timestamp : undefined;
+  },
+  registerCitation: (paperId, key, c) =>
+    set((s) => {
+      const paper = s.citations[paperId] ?? {};
+      return {
+        citations: {
+          ...s.citations,
+          [paperId]: { ...paper, [key]: c },
+        },
+      };
+    }),
 }),
     {
       name: "atlas:workspace",
@@ -392,6 +449,8 @@ export const useAtlas = create<AtlasState>()(
         ledgers: s.ledgers,
         forecasts: s.forecasts,
         bindings: s.bindings,
+        authorEdits: s.authorEdits,
+        citations: s.citations,
       }),
       // If a returning user has zero tabs (e.g. they closed everything before
       // refreshing), make sure they don't land on a blank screen with no way

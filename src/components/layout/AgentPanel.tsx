@@ -62,6 +62,32 @@ async function verifyAndPatch(
   }
 }
 
+/** Same pattern as verifyAndPatch but for multi-step plans. The plan UI
+ * surfaces per-step unsupportedClaims as a yellow warning before the user
+ * accepts each step. */
+async function verifyPlanAndPatch(
+  plan: EditPlan,
+  pendingId: string,
+  patchMessage: (id: string, patch: Partial<AgentMessage>) => void,
+) {
+  try {
+    const r = await fetch("/api/verify-proposal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan }),
+      // Plans have multiple steps — give it more time than a single proposal.
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!r.ok) return;
+    const data = (await r.json()) as { ok: boolean; plan?: EditPlan };
+    if (data.ok && data.plan) {
+      patchMessage(pendingId, { plan: data.plan });
+    }
+  } catch {
+    /* leave the un-verified plan as-is */
+  }
+}
+
 const QUICK_PROMPTS: Record<Mode, { label: string; prompt: string }[]> = {
   edit: [
     { label: "Tighten", prompt: "Rewrite the selected text to be ~30% shorter without losing meaning. Keep the academic tone." },
@@ -242,14 +268,19 @@ export function AgentPanel() {
         try {
           const parsed = JSON.parse(part.trim());
           if (parsed?.steps) {
-            patch.plan = {
+            const plan: EditPlan = {
               goal: parsed.goal ?? "",
               steps: (parsed.steps as EditPlanStep[]).map((s, i) => ({
                 ...s,
                 id: s.id || `s${i + 1}`,
                 status: "pending",
               })),
-            } satisfies EditPlan;
+            };
+            patch.plan = plan;
+            // Same gating model as edit proposals — each plan step is
+            // checked against external registries for inline citations and
+            // declared sources. The agent's plan UI updates in place.
+            void verifyPlanAndPatch(plan, pendingId, patchMessage);
           }
         } catch {}
       }
@@ -490,13 +521,21 @@ export function AgentPanel() {
     const url = c.url || (c.doi ? `https://doi.org/${c.doi}` : "");
     const label = `${key}${yr}`;
     const before = editor.state.selection.from;
+    // Cite-mode candidates came from /api/verify-citation in
+    // gatherCitationContext — the server filtered to confidence ≥ 0.6 before
+    // streaming, so this insertion is server-verified. Mark the chip
+    // explicitly so the editor can render a verified badge.
     editor
       .chain()
       .focus()
       .insertContent(
-        `<span class="citation" data-key="${escapeHtml(label)}" data-url="${escapeHtml(url)}">[${escapeHtml(label)}]</span> `,
+        `<span class="citation" data-key="${escapeHtml(label)}" data-url="${escapeHtml(url)}" data-verified="1" data-resolved-via="${escapeHtml(c.source)}">[${escapeHtml(label)}]</span> `,
       )
       .run();
+    // Register full citation metadata for the References generator.
+    if (paper?.id) {
+      useAtlas.getState().registerCitation(paper.id, label, c);
+    }
     const after = editor.state.selection.from;
     const paperId = paper?.id;
     if (paperId) {
@@ -1088,6 +1127,45 @@ function PlanCard({
                 {s.draft}
               </div>
               <div className="text-[10.5px] text-subtle">{s.why}</div>
+              {s.sources && s.sources.length > 0 && (
+                <div className="text-[10.5px] text-subtle flex items-center gap-1 flex-wrap pt-0.5">
+                  <span className="font-mono uppercase tracking-[0.12em]">
+                    sources:
+                  </span>
+                  {s.sources.map((src, sidx) => (
+                    <span
+                      key={sidx}
+                      className={cn(
+                        "px-1 py-0.5 rounded border text-[9.5px] font-mono",
+                        src.verified
+                          ? "border-accent/40 bg-accent-soft text-accent"
+                          : src.verified === false
+                            ? "border-warning/40 bg-warning/5 text-warning"
+                            : "border-border text-subtle",
+                      )}
+                      title={
+                        src.verified
+                          ? `verified via ${src.resolvedVia ?? "registry"}${src.confidence ? ` · ${Math.round(src.confidence * 100)}%` : ""}`
+                          : src.verified === false
+                            ? "could not verify against any registry"
+                            : "pending verification"
+                      }
+                    >
+                      {src.label || src.doi || src.url || "?"}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {s.unsupportedClaims && s.unsupportedClaims.length > 0 && (
+                <div className="text-[10.5px] text-warning flex items-start gap-1.5 pt-0.5">
+                  <ShieldAlert className="size-2.5 mt-0.5 shrink-0" />
+                  <span>
+                    Unverified citation
+                    {s.unsupportedClaims.length === 1 ? "" : "s"}:{" "}
+                    {s.unsupportedClaims.join(", ")}
+                  </span>
+                </div>
+              )}
             </li>
           );
         })}

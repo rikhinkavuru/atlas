@@ -216,6 +216,55 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
   const ref = useFocusTrap<HTMLFormElement>(true);
   const [key, setKey] = useState("");
   const [url, setUrl] = useState("");
+  const [verifyStatus, setVerifyStatus] = useState<
+    "idle" | "checking" | "ok" | "unresolved" | "error"
+  >("idle");
+  const [verifyMessage, setVerifyMessage] = useState<string>("");
+
+  // Verify the DOI/URL against /api/verify-citation before allowing the
+  // user to insert. We don't block insertion of unresolved citations —
+  // researchers sometimes need to insert in-progress refs — but we warn
+  // clearly so the user has to opt in.
+  async function verify() {
+    const q = url.trim() || key.trim();
+    if (!q) {
+      setVerifyStatus("idle");
+      return;
+    }
+    setVerifyStatus("checking");
+    setVerifyMessage("");
+    try {
+      const r = await fetch("/api/verify-citation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q }),
+      });
+      if (!r.ok) {
+        setVerifyStatus("error");
+        setVerifyMessage(`verifier returned ${r.status}`);
+        return;
+      }
+      const data = (await r.json()) as {
+        resolved: boolean;
+        best?: { title?: string; confidence?: number; source?: string } | null;
+        warning?: string;
+      };
+      if (data.resolved && data.best) {
+        setVerifyStatus("ok");
+        setVerifyMessage(
+          `${data.best.title?.slice(0, 80) ?? "Matched"} · via ${data.best.source}`,
+        );
+      } else {
+        setVerifyStatus("unresolved");
+        setVerifyMessage(
+          data.warning ?? "No high-confidence match in any registry.",
+        );
+      }
+    } catch (e) {
+      setVerifyStatus("error");
+      setVerifyMessage(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -233,7 +282,7 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
       ?.chain()
       .focus()
       .insertContent(
-        `<span class="citation" data-key="${escapeHtml(trimmed)}" data-url="${escapeHtml(url.trim())}">[${escapeHtml(trimmed)}]</span> `,
+        `<span class="citation" data-key="${escapeHtml(trimmed)}" data-url="${escapeHtml(url.trim())}" data-verified="${verifyStatus === "ok" ? "1" : "0"}">[${escapeHtml(trimmed)}]</span> `,
       )
       .run();
     onClose();
@@ -256,15 +305,61 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
         </label>
         <label className="block">
           <span className="text-[11px] uppercase tracking-[0.15em] font-mono text-subtle">
-            URL or DOI <span className="text-subtle/70 normal-case tracking-normal">(optional)</span>
+            URL or DOI{" "}
+            <span className="text-subtle/70 normal-case tracking-normal">
+              (optional — runs through registry check)
+            </span>
           </span>
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://doi.org/…"
-            className="input mt-1 w-full"
-          />
+          <div className="flex items-center gap-1.5 mt-1">
+            <input
+              value={url}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                setVerifyStatus("idle");
+              }}
+              onBlur={verify}
+              placeholder="https://doi.org/…"
+              className="input flex-1"
+            />
+            <button
+              type="button"
+              onClick={verify}
+              disabled={verifyStatus === "checking"}
+              className="btn btn-ghost h-9 text-[11.5px] text-muted disabled:opacity-50"
+              title="Check this against CrossRef / OpenAlex / Semantic Scholar / Nia"
+            >
+              Verify
+            </button>
+          </div>
         </label>
+        {verifyStatus !== "idle" && (
+          <div
+            className={cn(
+              "text-[11px] rounded px-2 py-1.5 border flex items-start gap-1.5",
+              verifyStatus === "ok" &&
+                "border-accent/30 bg-accent-soft/40 text-accent",
+              verifyStatus === "unresolved" &&
+                "border-warning/40 bg-warning/5 text-warning",
+              verifyStatus === "error" &&
+                "border-warning/40 bg-warning/5 text-warning",
+              verifyStatus === "checking" &&
+                "border-border bg-surface-2/40 text-subtle",
+            )}
+          >
+            <span className="font-mono text-[9.5px] uppercase tracking-[0.12em] pt-0.5">
+              {verifyStatus === "ok"
+                ? "verified"
+                : verifyStatus === "unresolved"
+                  ? "no match"
+                  : verifyStatus === "error"
+                    ? "error"
+                    : "checking…"}
+            </span>
+            <span className="flex-1 leading-snug">
+              {verifyMessage || "—"}
+            </span>
+          </div>
+        )}
         <div className="flex items-center justify-end gap-2 pt-1">
           <button
             type="button"
@@ -274,7 +369,7 @@ function CitationDialog({ onClose }: { onClose: () => void }) {
             Cancel
           </button>
           <button type="submit" className="btn btn-primary h-8 text-[12px]">
-            Insert
+            {verifyStatus === "unresolved" ? "Insert anyway" : "Insert"}
           </button>
         </div>
       </form>

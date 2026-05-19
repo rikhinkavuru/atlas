@@ -11,6 +11,7 @@ import {
   Library,
   ShieldCheck,
   Sigma,
+  BookOpenCheck,
   ArrowRight,
 } from "lucide-react";
 import { useAtlas } from "@/lib/store";
@@ -209,6 +210,17 @@ export function CommandPalette() {
         // Reuse the slash menu's math form by simulating a slash at the
         // current cursor: PaperEditor listens to this event and pops it open.
         window.dispatchEvent(new CustomEvent("atlas:open-math-insert"));
+      },
+    },
+    {
+      id: "generate-references",
+      title: "Generate references",
+      desc: "Format the paper's citations in APA / Chicago / MLA / Vancouver / IEEE",
+      icon: <BookOpenCheck className="size-4" />,
+      group: "Editor",
+      run: () => {
+        toggle(false);
+        window.dispatchEvent(new CustomEvent("atlas:open-references"));
       },
     },
   ];

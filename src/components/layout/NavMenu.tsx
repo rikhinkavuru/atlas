@@ -203,6 +203,12 @@ function getMenus(): Record<string, MenuItem[]> {
         onClick: openInsertCitation,
       },
       {
+        label: "Generate references…",
+        onClick: () =>
+          window.dispatchEvent(new CustomEvent("atlas:open-references")),
+        disabled: !paper,
+      },
+      {
         label: "Search the web for sources…",
         onClick: () => {
           const id = `t_search_${Math.random().toString(36).slice(2, 7)}`;
