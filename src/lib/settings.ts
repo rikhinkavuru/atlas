@@ -28,6 +28,10 @@ export interface Settings {
   focusMode: boolean;
   /** Render the 2px provenance left-border on top-level blocks. Default on. */
   showBlockProvenance: boolean;
+  /** Show hierarchical "1.2.3" prefixes before headings. Default off —
+   *  not every paper format wants visible inline numbers; sections still
+   *  get numbered in xref output and LaTeX export regardless. */
+  showSectionNumbers: boolean;
   /** Reviewer-Model corpus opt-in default for new papers. The `corpusOptIn`
    * field below tracks the per-paper override on top of this default. */
   corpusOptInDefault: boolean;
@@ -62,6 +66,7 @@ interface SettingsState extends Settings {
   setAgentPanelWidth: (w: number) => void;
   toggleFocusMode: (open?: boolean) => void;
   toggleShowBlockProvenance: () => void;
+  toggleShowSectionNumbers: () => void;
   toggleCorpusOptInDefault: () => void;
   setCorpusOptIn: (paperId: string, value: boolean | null) => void;
   isCorpusOptedIn: (paperId: string) => boolean;
@@ -90,6 +95,7 @@ const defaults: Settings = {
   agentPanelWidth: 420,
   focusMode: false,
   showBlockProvenance: true,
+  showSectionNumbers: false,
   // Reviewer-Model corpus opt-in is OFF by default — promise is "stay-out is
   // the default and we don't penalise you for it". User flips this globally
   // OR per-paper, and the per-paper override beats the default.
@@ -133,6 +139,8 @@ export const useSettings = create<SettingsState>()(
         set((s) => ({ focusMode: open ?? !s.focusMode })),
       toggleShowBlockProvenance: () =>
         set((s) => ({ showBlockProvenance: !s.showBlockProvenance })),
+      toggleShowSectionNumbers: () =>
+        set((s) => ({ showSectionNumbers: !s.showSectionNumbers })),
       toggleCorpusOptInDefault: () =>
         set((s) => ({ corpusOptInDefault: !s.corpusOptInDefault })),
       setCorpusOptIn: (paperId, value) =>

@@ -425,6 +425,23 @@ body {
   font-size: 1.05em;
 }
 
+/* Section-number prefix — widget decoration inserted before every
+   heading by SectionNumbers plugin. Hidden by default; the
+   `.show-section-numbers` class on the .tiptap container flips them on.
+   The widget itself is contenteditable=false so the cursor moves
+   through correctly. */
+.tiptap .atlas-section-number {
+  display: none;
+}
+.tiptap.show-section-numbers .atlas-section-number {
+  display: inline-block;
+  margin-right: 0.55em;
+  color: var(--subtle);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
 /* Cross-reference inline chip — renders the live "Figure N" / "Table N"
    for a target label. Dead targets flash a warning state so the author
    notices broken references before submitting. */

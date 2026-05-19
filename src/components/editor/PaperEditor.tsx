@@ -35,6 +35,7 @@ import { Figure } from "./figure";
 import { TableCaption } from "./table-caption";
 import { XRef } from "./xref";
 import { HeadingLabels } from "./heading-labels";
+import { SectionNumbers } from "./section-numbers";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import "katex/dist/katex.min.css";
@@ -101,6 +102,7 @@ function recordEditPulse(
 }
 import type { Tab } from "@/types";
 import { SlashMenu } from "./SlashMenu";
+import { XRefAutocomplete, type XRefAutoState } from "./XRefAutocomplete";
 
 export function PaperEditor({ tab }: { tab: Tab }) {
   const paper = useAtlas((s) =>
@@ -109,6 +111,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
   const updatePaper = useAtlas((s) => s.updatePaper);
   const setSelection = useAtlas((s) => s.setSelection);
   const showBlockProvenance = useSettings((s) => s.showBlockProvenance);
+  const showSectionNumbers = useSettings((s) => s.showSectionNumbers);
   const collab = useCollab();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [bubble, setBubble] = useState<{
@@ -124,6 +127,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     /** Optional: pre-open the slash menu directly into an inline form. */
     initialForm?: "math" | "citation";
   } | null>(null);
+  const [xrefAuto, setXRefAuto] = useState<XRefAutoState | null>(null);
 
   // When collab is on, StarterKit's `history` must be off — Yjs ships its
   // own undo/redo manager that's CRDT-aware. Loading both produces dueling
@@ -161,6 +165,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       TableCaption,
       XRef,
       HeadingLabels,
+      SectionNumbers,
       // Markdown-style math input rules: $$...$$ → block, $...$ → inline.
       // Fires when the user types the closing delimiter.
       MathInputRules,
@@ -192,7 +197,11 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     content: collab.enabled ? "" : (paper?.html ?? ""),
     editorProps: {
       attributes: {
-        class: cn("tiptap", !showBlockProvenance && "no-block-prov"),
+        class: cn(
+          "tiptap",
+          !showBlockProvenance && "no-block-prov",
+          showSectionNumbers && "show-section-numbers",
+        ),
       },
       handleKeyDown(view, event) {
         if (event.key === "/") {
@@ -207,8 +216,43 @@ export function PaperEditor({ tab }: { tab: Tab }) {
               from,
             });
           });
+        } else if (event.key === "{") {
+          // Check whether the user just completed a `\ref{` / `\autoref{` /
+          // `\cref{` trigger. We look at the 10 chars before the cursor
+          // — that's enough for `\autoref{` (9 chars) plus one extra
+          // position so we can detect a leading backslash that would mark
+          // the sequence as escaped (e.g. `\\ref{` is a literal `\ref{` in
+          // the author's prose, not an actual trigger).
+          requestAnimationFrame(() => {
+            const sel = view.state.selection;
+            const cursor = sel.from;
+            const start = Math.max(0, cursor - 10);
+            const lookback = view.state.doc.textBetween(start, cursor, " ", " ");
+            const match = /\\(?:auto)?ref\{$|\\cref\{$/.exec(lookback);
+            if (!match) return;
+            // Suppress when the trigger is preceded by another backslash
+            // (escaped). Negative lookbehind isn't always supported across
+            // all engines we'd want to ship to, so check explicitly.
+            const triggerStartIndexInLookback =
+              lookback.length - match[0].length;
+            if (
+              triggerStartIndexInLookback > 0 &&
+              lookback.charAt(triggerStartIndexInLookback - 1) === "\\"
+            ) {
+              return;
+            }
+            const triggerLength = match[0].length;
+            const coords = view.coordsAtPos(cursor);
+            setXRefAuto({
+              from: cursor,
+              x: coords.left,
+              y: coords.bottom + 6,
+              triggerLength,
+            });
+          });
         } else if (event.key === "Escape") {
           setSlash(null);
+          setXRefAuto(null);
         }
         return false;
       },
@@ -325,7 +369,8 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     if (!editor) return;
     const dom = editor.view.dom as HTMLElement;
     dom.classList.toggle("no-block-prov", !showBlockProvenance);
-  }, [editor, showBlockProvenance]);
+    dom.classList.toggle("show-section-numbers", showSectionNumbers);
+  }, [editor, showBlockProvenance, showSectionNumbers]);
 
   // Tag headings with anchor ids for outline scroll
   useEffect(() => {
@@ -389,6 +434,14 @@ export function PaperEditor({ tab }: { tab: Tab }) {
           slashFrom={slash.from}
           initialForm={slash.initialForm}
           onClose={() => setSlash(null)}
+        />
+      )}
+
+      {xrefAuto && editor && (
+        <XRefAutocomplete
+          editor={editor}
+          state={xrefAuto}
+          onClose={() => setXRefAuto(null)}
         />
       )}
     </div>

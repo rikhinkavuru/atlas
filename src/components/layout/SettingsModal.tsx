@@ -387,6 +387,22 @@ export function SettingsModal({ open, onClose }: Props) {
                           </span>
                         </span>
                       </label>
+                      <label className="flex items-center gap-2 text-[13px] mt-2">
+                        <input
+                          type="checkbox"
+                          checked={settings.showSectionNumbers}
+                          onChange={settings.toggleShowSectionNumbers}
+                          className="accent-accent"
+                        />
+                        <span className="flex-1">
+                          Show inline section numbers
+                          <span className="block text-[11px] text-subtle leading-tight mt-0.5">
+                            Prepend "1.2.3" before each heading. Cross-refs
+                            and LaTeX export already use these numbers
+                            regardless of this setting.
+                          </span>
+                        </span>
+                      </label>
                     </Field>
                   </div>
                 )}
