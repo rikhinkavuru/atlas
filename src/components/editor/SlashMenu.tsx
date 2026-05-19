@@ -15,10 +15,13 @@ import {
   Sparkles,
   Sigma,
   Image as ImageIcon,
+  Table as TableIcon,
+  Link2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useAtlas } from "@/lib/store";
+import { collectXRefTargets } from "./xref";
 import katex from "katex";
 
 type Item = {
@@ -29,7 +32,7 @@ type Item = {
   needsCleanup?: boolean;
   /** When set, slash-menu returns this kind to the host so it can show an
    * inline form instead of running `apply` immediately. */
-  inlineForm?: "citation" | "math" | "figure";
+  inlineForm?: "citation" | "math" | "figure" | "xref" | "captioned-table";
 };
 
 const items: Item[] = [
@@ -115,6 +118,22 @@ const items: Item[] = [
     needsCleanup: true,
   },
   {
+    title: "Captioned table",
+    desc: "3×3 table with auto-numbered Table N. caption",
+    icon: <TableIcon className="size-4" />,
+    inlineForm: "captioned-table",
+    apply: () => {},
+    needsCleanup: true,
+  },
+  {
+    title: "Cross-reference",
+    desc: "Refer to a numbered Figure or Table",
+    icon: <Link2 className="size-4" />,
+    inlineForm: "xref",
+    apply: () => {},
+    needsCleanup: true,
+  },
+  {
     title: "Ask the agent",
     desc: "Open the AI agent panel",
     icon: <Sparkles className="size-4" />,
@@ -144,12 +163,15 @@ export function SlashMenu({
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [inlineForm, setInlineForm] = useState<null | "citation" | "math" | "figure">(
-    initialForm ?? null,
-  );
+  const [inlineForm, setInlineForm] = useState<
+    null | "citation" | "math" | "figure" | "xref" | "captioned-table"
+  >(initialForm ?? null);
   const [figSrc, setFigSrc] = useState("");
   const [figCaption, setFigCaption] = useState("");
   const [figLabel, setFigLabel] = useState("");
+  const [tableCaption, setTableCaption] = useState("");
+  const [tableLabel, setTableLabel] = useState("");
+  const [xrefTarget, setXrefTarget] = useState("");
   const [formKey, setFormKey] = useState("");
   const [formUrl, setFormUrl] = useState("");
   const [mathTex, setMathTex] = useState("");
@@ -256,10 +278,46 @@ export function SlashMenu({
       setInlineForm("figure");
       return;
     }
+    if (item.inlineForm === "captioned-table") {
+      cleanupSlash();
+      setInlineForm("captioned-table");
+      return;
+    }
+    if (item.inlineForm === "xref") {
+      cleanupSlash();
+      setInlineForm("xref");
+      return;
+    }
     if (item.needsCleanup) cleanupSlash();
     item.apply(editor);
     onClose();
   }
+
+  function submitCaptionedTable() {
+    const caption = tableCaption.trim();
+    if (!caption) {
+      onClose();
+      return;
+    }
+    editor.commands.insertCaptionedTable(caption, tableLabel.trim() || undefined);
+    onClose();
+  }
+
+  function submitXRef() {
+    const target = xrefTarget.trim();
+    if (!target) {
+      onClose();
+      return;
+    }
+    editor.commands.insertXRef(target);
+    onClose();
+  }
+
+  // List of labeled targets in the document — used by the xref picker so
+  // users can pick from an existing label rather than retyping it from
+  // memory and risking a dead link.
+  const xrefCandidates =
+    inlineForm === "xref" ? collectXRefTargets(editor.state.doc) : [];
 
   function submitFigure() {
     const src = figSrc.trim();
@@ -396,6 +454,166 @@ export function SlashMenu({
       useAtlas.getState().registerCitation(paperId, key, cand);
     }
     onClose();
+  }
+
+  if (inlineForm === "xref") {
+    const clampedX =
+      typeof window !== "undefined"
+        ? Math.max(8, Math.min(x, window.innerWidth - 360))
+        : x;
+    return (
+      <div
+        ref={ref}
+        className="fixed z-30 panel shadow-2xl w-[360px] max-w-[92vw] p-3 rounded-lg overflow-hidden"
+        style={{ left: clampedX, top: y }}
+      >
+        <div className="px-1 pb-2 text-[10px] uppercase tracking-[0.15em] text-subtle flex items-center justify-between">
+          <span>Cross-reference</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cancel"
+            className="h-5 w-5 rounded flex items-center justify-center text-subtle hover:text-foreground hover:bg-surface-2"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitXRef();
+          }}
+          className="space-y-1.5"
+        >
+          <input
+            ref={formInputRef}
+            value={xrefTarget}
+            onChange={(e) => setXrefTarget(e.target.value)}
+            placeholder="Target label (e.g. fig:overview)"
+            className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] font-mono focus:outline-none focus:border-accent"
+          />
+          {xrefCandidates.length > 0 ? (
+            <div className="max-h-44 overflow-y-auto border border-border rounded">
+              {xrefCandidates.map((c) => (
+                <button
+                  key={`${c.kind}-${c.label}`}
+                  type="button"
+                  onClick={() => setXrefTarget(c.label)}
+                  className={cn(
+                    "w-full flex items-center gap-2 px-2 py-1.5 text-[11.5px] text-left hover:bg-surface-2",
+                    xrefTarget === c.label && "bg-accent-soft text-accent",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "px-1 rounded text-[9.5px] font-mono uppercase tracking-[0.12em]",
+                      c.kind === "figure"
+                        ? "bg-accent-soft text-accent border border-accent/30"
+                        : "bg-info/10 text-info border border-info/30",
+                    )}
+                  >
+                    {c.kind} {c.number}
+                  </span>
+                  <span className="font-mono text-subtle truncate">
+                    {c.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10.5px] text-subtle leading-relaxed">
+              No labeled figures or tables in this document yet. Add a label
+              when inserting a figure (e.g. <span className="font-mono">fig:overview</span>)
+              and it'll show up here.
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-7 px-2 rounded text-[11px] text-muted hover:text-foreground hover:bg-surface-2"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!xrefTarget.trim()}
+              className="h-7 px-2 rounded text-[11px] bg-accent text-accent-fg disabled:opacity-40"
+            >
+              Insert
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  if (inlineForm === "captioned-table") {
+    const clampedX =
+      typeof window !== "undefined"
+        ? Math.max(8, Math.min(x, window.innerWidth - 408))
+        : x;
+    return (
+      <div
+        ref={ref}
+        className="fixed z-30 panel shadow-2xl w-[400px] max-w-[92vw] p-3 rounded-lg overflow-hidden"
+        style={{ left: clampedX, top: y }}
+      >
+        <div className="px-1 pb-2 text-[10px] uppercase tracking-[0.15em] text-subtle flex items-center justify-between">
+          <span>Insert captioned table</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cancel"
+            className="h-5 w-5 rounded flex items-center justify-center text-subtle hover:text-foreground hover:bg-surface-2"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitCaptionedTable();
+          }}
+          className="space-y-1.5"
+        >
+          <input
+            ref={formInputRef}
+            value={tableCaption}
+            onChange={(e) => setTableCaption(e.target.value)}
+            placeholder="Caption text (required)"
+            className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] focus:outline-none focus:border-accent"
+          />
+          <input
+            value={tableLabel}
+            onChange={(e) => setTableLabel(e.target.value)}
+            placeholder="Label for cross-ref (optional, e.g. tab:results)"
+            className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] font-mono focus:outline-none focus:border-accent"
+          />
+          <p className="text-[10px] text-subtle leading-relaxed pt-1">
+            Inserts a 3×3 editable table with an auto-numbered Table N.
+            caption block beneath it. LaTeX export wraps the pair in{" "}
+            <span className="font-mono">\begin{`{table}`}</span>.
+          </p>
+          <div className="flex items-center justify-end gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-7 px-2 rounded text-[11px] text-muted hover:text-foreground hover:bg-surface-2"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!tableCaption.trim()}
+              className="h-7 px-2 rounded text-[11px] bg-accent text-accent-fg disabled:opacity-40"
+            >
+              Insert
+            </button>
+          </div>
+        </form>
+      </div>
+    );
   }
 
   if (inlineForm === "figure") {

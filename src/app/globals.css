@@ -403,6 +403,50 @@ body {
   font-size: 1.05em;
 }
 
+/* Cross-reference inline chip — renders the live "Figure N" / "Table N"
+   for a target label. Dead targets flash a warning state so the author
+   notices broken references before submitting. */
+.tiptap .atlas-xref {
+  display: inline-block;
+  padding: 0 4px;
+  margin: 0 1px;
+  border-radius: 3px;
+  font-family: var(--font-sans);
+  font-size: 0.9em;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  cursor: pointer;
+  vertical-align: 0.04em;
+  transition: background var(--duration-fast) var(--ease);
+}
+.tiptap .atlas-xref:hover {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+.tiptap .atlas-xref.atlas-xref-dead {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+}
+/* Flash the target figure/table-caption when the user clicks an xref so
+   they see where the jump landed. */
+.tiptap .atlas-xref-flash {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 38%, transparent);
+  transition: box-shadow var(--duration-base) var(--ease);
+}
+
+/* Caption block for tables — pairs visually with the table immediately
+   above it. Same typography as figcaption. */
+.tiptap .atlas-table-caption {
+  margin: -0.25rem 0 1.25rem;
+  font-size: 0.92em;
+  color: var(--muted);
+  line-height: 1.45;
+  text-align: center;
+}
+.tiptap .atlas-table-caption .atlas-table-caption-prefix {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
 /* Figure node — image with caption + auto-numbered "Figure N." prefix.
    Captions are read-only (contenteditable=false on the NodeView); editing
    happens by re-inserting the figure with new attrs. */

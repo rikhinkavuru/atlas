@@ -107,6 +107,52 @@ export function htmlToLaTeX(
       /<span class="math math-inline"\s+data-tex="([^"]*)"[^>]*>[\s\S]*?<\/span>/gi,
       (_m, t) => `$${decodeAttr(t)}$`,
     )
+    // Cross-references: <span class="atlas-xref" data-target="fig:foo">
+    // Figure 3</span> → \ref{fig:foo}. We trust the label spelling and
+    // strip the visible text — pdflatex will substitute the real number
+    // from the \label that the figure block emits.
+    .replace(
+      /<span class="atlas-xref"\s+data-target="([^"]*)"[^>]*>[\s\S]*?<\/span>/gi,
+      (_m, target) => {
+        const safe = (target ?? "").replace(/[^A-Za-z0-9_:\-]/g, "");
+        return safe ? `\\ref{${safe}}` : "??";
+      },
+    )
+    // Captioned tables: an Atlas TableCaption immediately follows a table.
+    // We rewrite the pair into a \begin{table}\centering ... \caption \label
+    // \end{table} block. The tabular body comes from a regex over the
+    // table's rows because the venue template already includes the
+    // `tabular` environment; we don't need to invent column specs here
+    // (default to `l*` based on column count).
+    .replace(
+      /<table[^>]*>([\s\S]*?)<\/table>\s*<div class="atlas-table-caption"\s*([^>]*)>([\s\S]*?)<\/div>/gi,
+      (_m, tableInner: string, captionAttrs: string, captionInner: string) => {
+        const labelMatch = /data-table-caption-label="([^"]*)"/.exec(
+          captionAttrs,
+        );
+        const captionDataMatch = /data-caption="([^"]*)"/.exec(captionAttrs);
+        // Strip the auto-numbered "Table N." prefix span and any other
+        // tags from the visible caption; prefer data-caption when present.
+        const rawCaption = (
+          captionDataMatch?.[1] ??
+          captionInner
+            .replace(
+              /<span class="atlas-table-caption-prefix"[^>]*>[\s\S]*?<\/span>/i,
+              "",
+            )
+            .replace(/<[^>]+>/g, "")
+        )
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .trim();
+        const safeLabel =
+          (labelMatch?.[1] ?? "").replace(/[^A-Za-z0-9_:\-]/g, "");
+        const labelLine = safeLabel ? `\\label{${safeLabel}}\n` : "";
+        const tabular = htmlTableToTabular(tableInner);
+        return `\n\\begin{table}[t]\n\\centering\n${tabular}\n\\caption{${tex(rawCaption)}}\n${labelLine}\\end{table}\n`;
+      },
+    )
     // Figures: <figure class="atlas-figure" data-label="…">
     //   <img src="…" alt="…" /><figcaption>…</figcaption>
     // </figure>
@@ -271,6 +317,45 @@ function escapeBibTex(s: string) {
 function extractAttr(html: string, name: string): string | null {
   const m = new RegExp(`${name}="([^"]*)"`).exec(html);
   return m ? m[1] : null;
+}
+
+/**
+ * Convert an HTML <table>'s inner rows/cells into a LaTeX tabular block.
+ *
+ * We pick the column count from the first row (the most reliable signal
+ * we have without parsing column-specs), default to left-aligned `l`
+ * for every column, and emit cells separated by `&` with `\\` line
+ * terminators. Cell content is run through `tex()` to escape special
+ * characters; embedded paragraph / list / span markup is reduced via
+ * stripTags.
+ */
+function htmlTableToTabular(html: string): string {
+  // Pull every <tr>…</tr> in order. We handle both <th> and <td> cells.
+  const rowMatches = html.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) ?? [];
+  if (rowMatches.length === 0) {
+    return "\\begin{tabular}{l}\n\\end{tabular}";
+  }
+  const rows: string[][] = rowMatches.map((row) => {
+    const cells = (row.match(/<t[hd][^>]*>[\s\S]*?<\/t[hd]>/gi) ?? []).map(
+      (cell) =>
+        tex(
+          cell
+            .replace(/<[^>]+>/g, "")
+            .replace(/&nbsp;/g, " ")
+            .replace(/\s+/g, " ")
+            .trim(),
+        ),
+    );
+    return cells;
+  });
+  const cols = Math.max(1, ...rows.map((r) => r.length));
+  const spec = "l".repeat(cols);
+  const lines = rows.map((r) => {
+    // Pad short rows with empty cells so column alignment stays consistent.
+    while (r.length < cols) r.push("");
+    return r.slice(0, cols).join(" & ") + " \\\\";
+  });
+  return `\\begin{tabular}{${spec}}\n\\hline\n${lines.join("\n")}\n\\hline\n\\end{tabular}`;
 }
 
 /** Decode `data-tex` HTML entities back to LaTeX source. The Tiptap
