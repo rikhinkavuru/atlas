@@ -31,6 +31,7 @@ import { Citation, CommentMark, BindingMark, ProvenanceMark } from "./extensions
 import { BlockProvenance } from "./block-provenance";
 import { InlineMath, BlockMath } from "./math";
 import { MathInputRules } from "./math-input-rules";
+import { Figure } from "./figure";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import "katex/dist/katex.min.css";
@@ -153,6 +154,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       BlockProvenance,
       InlineMath,
       BlockMath,
+      Figure,
       // Markdown-style math input rules: $$...$$ → block, $...$ → inline.
       // Fires when the user types the closing delimiter.
       MathInputRules,

@@ -95,7 +95,61 @@ export function htmlToLaTeX(
 
   const citations: { key: string; url: string }[] = [];
 
+  // Capture math equations first — both block (display) and inline — and
+  // replace with LaTeX delimiters using the preserved tex source. Doing
+  // this before the generic tag stripper keeps the LaTeX intact.
   let body = html
+    .replace(
+      /<div class="math math-display"\s+data-tex="([^"]*)"[^>]*>[\s\S]*?<\/div>/gi,
+      (_m, t) => `\n\\[${decodeAttr(t)}\\]\n`,
+    )
+    .replace(
+      /<span class="math math-inline"\s+data-tex="([^"]*)"[^>]*>[\s\S]*?<\/span>/gi,
+      (_m, t) => `$${decodeAttr(t)}$`,
+    )
+    // Figures: <figure class="atlas-figure" data-label="…">
+    //   <img src="…" alt="…" /><figcaption>…</figcaption>
+    // </figure>
+    //
+    // We extract src + alt + caption + optional data-label, slugify the
+    // label for \label{fig:slug}, and emit a centered figure block. The
+    // graphic placeholder uses `\includegraphics` which compiles cleanly
+    // against arXiv-friendly preambles (graphicx is already included by
+    // every venue template). For remote URLs we fall back to a comment
+    // pointing at the URL so the author knows to download + relink.
+    .replace(
+      /<figure\s+class="atlas-figure"[\s\S]*?<\/figure>/gi,
+      (block: string) => {
+        const src = extractAttr(block, "data-src") ?? extractAttr(block, "src") ?? "";
+        const alt = extractAttr(block, "alt") ?? "";
+        const captionMatch = /<figcaption[^>]*>([\s\S]*?)<\/figcaption>/i.exec(
+          block,
+        );
+        // Strip the auto-numbered "Figure N." prefix the NodeView injects
+        // before the user-typed caption text — the LaTeX \caption will
+        // re-add the numbering via \begin{figure}.
+        const rawCaption = (captionMatch?.[1] ?? "")
+          .replace(/<span class="atlas-figure-prefix"[^>]*>[\s\S]*?<\/span>/i, "")
+          .replace(/<[^>]+>/g, "")
+          .trim();
+        const label = extractAttr(block, "data-label");
+        const width = extractAttr(block, "data-width");
+        const isRemote = /^https?:\/\//i.test(src);
+        const widthOpt =
+          width && Number(width) < 1
+            ? `[width=${Math.round(Number(width) * 100)}%\\linewidth]`
+            : "[width=\\linewidth]";
+        const graphic = isRemote
+          ? `% Atlas: remote image — download and relink before submission\n% Source: ${src}\n\\includegraphics${widthOpt}{${slugifyKey(alt || rawCaption || "figure")}}`
+          : `\\includegraphics${widthOpt}{${src}}`;
+        // LaTeX accepts colons / dashes / underscores in \label{…}; we
+        // preserve those so the conventional "fig:overview" form survives
+        // the round-trip. Drop anything else (whitespace, punctuation).
+        const safeLabel = (label ?? "").replace(/[^A-Za-z0-9_:\-]/g, "");
+        const labelLine = safeLabel ? `\\label{${safeLabel}}\n` : "";
+        return `\n\\begin{figure}[t]\n\\centering\n${graphic}\n\\caption{${tex(rawCaption)}}\n${labelLine}\\end{figure}\n`;
+      },
+    )
     .replace(/<span class="citation"[^>]*>\[(.*?)\]<\/span>\s*/gi, (_m, key) => {
       const url = extractAttr(_m, "data-url");
       if (key && !citations.find((c) => c.key === key)) {
@@ -217,4 +271,16 @@ function escapeBibTex(s: string) {
 function extractAttr(html: string, name: string): string | null {
   const m = new RegExp(`${name}="([^"]*)"`).exec(html);
   return m ? m[1] : null;
+}
+
+/** Decode `data-tex` HTML entities back to LaTeX source. The Tiptap
+ *  serialiser writes `data-tex="a &amp; b"`; we want the literal `a & b`
+ *  for the LaTeX output. */
+function decodeAttr(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;/g, "'");
 }

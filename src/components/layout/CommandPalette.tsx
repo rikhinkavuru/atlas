@@ -13,6 +13,7 @@ import {
   Sigma,
   BookOpenCheck,
   Beaker,
+  Package,
   ArrowRight,
 } from "lucide-react";
 import { useAtlas } from "@/lib/store";
@@ -233,6 +234,17 @@ export function CommandPalette() {
       run: () => {
         toggle(false);
         window.dispatchEvent(new CustomEvent("atlas:open-references"));
+      },
+    },
+    {
+      id: "arxiv-bundle",
+      title: "Build arXiv submission bundle",
+      desc: "Zip up the .tex, .bib, signed ledger, and a submission README",
+      icon: <Package className="size-4" />,
+      group: "Workspace",
+      run: () => {
+        toggle(false);
+        window.dispatchEvent(new CustomEvent("atlas:open-arxiv-bundle"));
       },
     },
   ];

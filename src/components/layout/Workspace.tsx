@@ -27,6 +27,7 @@ import { NavDialogs } from "./NavDialogs";
 import { PublishLedgerDialog } from "./PublishLedgerDialog";
 import { ReferencesDialog } from "./ReferencesDialog";
 import { CorpusOptInDialog } from "./CorpusOptInDialog";
+import { ArxivBundleDialog } from "./ArxivBundleDialog";
 import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 
@@ -182,6 +183,7 @@ function WorkspaceInner() {
       <PublishLedgerDialog />
       <ReferencesDialog />
       <CorpusOptInDialog />
+      <ArxivBundleDialog />
     </div>
   );
 }

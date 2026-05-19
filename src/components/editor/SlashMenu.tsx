@@ -14,6 +14,7 @@ import {
   BookMarked,
   Sparkles,
   Sigma,
+  Image as ImageIcon,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -28,7 +29,7 @@ type Item = {
   needsCleanup?: boolean;
   /** When set, slash-menu returns this kind to the host so it can show an
    * inline form instead of running `apply` immediately. */
-  inlineForm?: "citation" | "math";
+  inlineForm?: "citation" | "math" | "figure";
 };
 
 const items: Item[] = [
@@ -106,6 +107,14 @@ const items: Item[] = [
     needsCleanup: true,
   },
   {
+    title: "Figure",
+    desc: "Image with caption + auto-numbered Figure N.",
+    icon: <ImageIcon className="size-4" />,
+    inlineForm: "figure",
+    apply: () => {},
+    needsCleanup: true,
+  },
+  {
     title: "Ask the agent",
     desc: "Open the AI agent panel",
     icon: <Sparkles className="size-4" />,
@@ -135,9 +144,12 @@ export function SlashMenu({
 }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const [inlineForm, setInlineForm] = useState<null | "citation" | "math">(
+  const [inlineForm, setInlineForm] = useState<null | "citation" | "math" | "figure">(
     initialForm ?? null,
   );
+  const [figSrc, setFigSrc] = useState("");
+  const [figCaption, setFigCaption] = useState("");
+  const [figLabel, setFigLabel] = useState("");
   const [formKey, setFormKey] = useState("");
   const [formUrl, setFormUrl] = useState("");
   const [mathTex, setMathTex] = useState("");
@@ -239,8 +251,28 @@ export function SlashMenu({
       setInlineForm("math");
       return;
     }
+    if (item.inlineForm === "figure") {
+      cleanupSlash();
+      setInlineForm("figure");
+      return;
+    }
     if (item.needsCleanup) cleanupSlash();
     item.apply(editor);
+    onClose();
+  }
+
+  function submitFigure() {
+    const src = figSrc.trim();
+    const caption = figCaption.trim();
+    if (!src || !caption) {
+      onClose();
+      return;
+    }
+    editor.commands.insertFigure({
+      src,
+      caption,
+      label: figLabel.trim() || undefined,
+    });
     onClose();
   }
 
@@ -364,6 +396,80 @@ export function SlashMenu({
       useAtlas.getState().registerCitation(paperId, key, cand);
     }
     onClose();
+  }
+
+  if (inlineForm === "figure") {
+    const clampedX =
+      typeof window !== "undefined"
+        ? Math.max(8, Math.min(x, window.innerWidth - 408))
+        : x;
+    return (
+      <div
+        ref={ref}
+        className="fixed z-30 panel shadow-2xl w-[400px] max-w-[92vw] p-3 rounded-lg overflow-hidden"
+        style={{ left: clampedX, top: y }}
+      >
+        <div className="px-1 pb-2 text-[10px] uppercase tracking-[0.15em] text-subtle flex items-center justify-between">
+          <span>Insert figure</span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cancel"
+            className="h-5 w-5 rounded flex items-center justify-center text-subtle hover:text-foreground hover:bg-surface-2"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submitFigure();
+          }}
+          className="space-y-1.5"
+        >
+          <input
+            ref={formInputRef}
+            value={figSrc}
+            onChange={(e) => setFigSrc(e.target.value)}
+            placeholder="Image URL (https://… or data:image/png;base64,…)"
+            className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] focus:outline-none focus:border-accent"
+          />
+          <input
+            value={figCaption}
+            onChange={(e) => setFigCaption(e.target.value)}
+            placeholder="Caption text (required)"
+            className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] focus:outline-none focus:border-accent"
+          />
+          <input
+            value={figLabel}
+            onChange={(e) => setFigLabel(e.target.value)}
+            placeholder="Label for cross-ref (optional, e.g. fig:overview)"
+            className="w-full bg-background border border-border rounded px-2 h-7 text-[12px] font-mono focus:outline-none focus:border-accent"
+          />
+          <p className="text-[10px] text-subtle leading-relaxed pt-1">
+            Figures are auto-numbered in document order. LaTeX export wraps
+            this as <span className="font-mono">\begin{`{figure}`}</span>{" "}
+            with the caption + label.
+          </p>
+          <div className="flex items-center justify-end gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={onClose}
+              className="h-7 px-2 rounded text-[11px] text-muted hover:text-foreground hover:bg-surface-2"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!figSrc.trim() || !figCaption.trim()}
+              className="h-7 px-2 rounded text-[11px] bg-accent text-accent-fg disabled:opacity-40"
+            >
+              Insert
+            </button>
+          </div>
+        </form>
+      </div>
+    );
   }
 
   if (inlineForm === "math") {

@@ -403,6 +403,36 @@ body {
   font-size: 1.05em;
 }
 
+/* Figure node — image with caption + auto-numbered "Figure N." prefix.
+   Captions are read-only (contenteditable=false on the NodeView); editing
+   happens by re-inserting the figure with new attrs. */
+.tiptap figure.atlas-figure {
+  margin: 1.5rem 0;
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.tiptap figure.atlas-figure img {
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+.tiptap figure.atlas-figure figcaption {
+  display: block;
+  margin: 0.75rem auto 0;
+  max-width: 90%;
+  font-size: 0.92em;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.tiptap figure.atlas-figure .atlas-figure-prefix {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
 /* Inline diff animation for accepted agent proposals — Cursor-style red
    strikethrough fades out while green insertion fades in, then the span
    collapses to plain text (done in JS via settleDiff, ~1.5s after insert).

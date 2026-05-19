@@ -132,6 +132,12 @@ function getMenus(): Record<string, MenuItem[]> {
         onClick: exportLaTeX,
         disabled: !paper,
       },
+      {
+        label: "Build arXiv submission bundle…",
+        onClick: () =>
+          window.dispatchEvent(new CustomEvent("atlas:open-arxiv-bundle")),
+        disabled: !paper,
+      },
       { label: "", separator: true },
       {
         label: "Publish ledger…",
