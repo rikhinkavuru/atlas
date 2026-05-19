@@ -31,11 +31,14 @@ import { Citation, CommentMark, BindingMark, ProvenanceMark } from "./extensions
 import { BlockProvenance } from "./block-provenance";
 import { InlineMath, BlockMath } from "./math";
 import { MathInputRules } from "./math-input-rules";
+import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import "katex/dist/katex.min.css";
 import { createBinding } from "@/lib/binding";
 import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/cn";
+import { useCollab } from "../collab/CollabProvider";
 
 // Last-seen char count per paper. Drives the wordsDelta/charsDelta in author
 // edit log entries — diffing the current paper against the previous keystroke
@@ -98,6 +101,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
   const updatePaper = useAtlas((s) => s.updatePaper);
   const setSelection = useAtlas((s) => s.setSelection);
   const showBlockProvenance = useSettings((s) => s.showBlockProvenance);
+  const collab = useCollab();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [bubble, setBubble] = useState<{
     x: number;
@@ -113,12 +117,18 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     initialForm?: "math" | "citation";
   } | null>(null);
 
+  // When collab is on, StarterKit's `history` must be off — Yjs ships its
+  // own undo/redo manager that's CRDT-aware. Loading both produces dueling
+  // histories and breaks redo across peers.
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
         link: false,
+        // StarterKit's built-in undoRedo conflicts with Yjs's CRDT-aware
+        // history when collab is on — disable it so peers don't desync.
+        ...(collab.enabled ? { undoRedo: false as const } : {}),
       }),
       Placeholder.configure({
         placeholder: "Start drafting. Press / for blocks, ⌘L for the agent.",
@@ -142,8 +152,32 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       // Markdown-style math input rules: $$...$$ → block, $...$ → inline.
       // Fires when the user types the closing delimiter.
       MathInputRules,
+      // Collaboration extensions are added only when a Yjs document is
+      // available (a Liveblocks room is open). The Collaboration extension
+      // takes over content management — the `content` prop is ignored when
+      // it's present — so we have to seed the document from the local paper
+      // on first connect; see the useEffect further below.
+      ...(collab.enabled && collab.yDoc
+        ? [
+            Collaboration.configure({ document: collab.yDoc }),
+            ...(collab.yProvider
+              ? [
+                  CollaborationCursor.configure({
+                    provider: collab.yProvider,
+                    user: {
+                      name: collab.selfUser.name,
+                      color: collab.selfUser.color,
+                    },
+                  }),
+                ]
+              : []),
+          ]
+        : []),
     ],
-    content: paper?.html ?? "",
+    // Only set initial content when collab is off — when collab is on the
+    // content gets seeded from the Yjs document, and providing `content`
+    // here would race with the Liveblocks sync.
+    content: collab.enabled ? "" : (paper?.html ?? ""),
     editorProps: {
       attributes: {
         class: cn("tiptap", !showBlockProvenance && "no-block-prov"),
@@ -214,6 +248,28 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       seedLastSeen(tab.paperId, paper.html);
     }
   }, [tab.paperId, paper]);
+
+  // First-connect content seeding for collab. The Yjs document starts empty
+  // when a brand-new room is opened. We need to push the local paper into
+  // it once the provider has synced (so we don't clobber existing content
+  // from other peers who joined first). The yProvider emits a "synced"
+  // event the moment the initial state is in hand — that's our cue.
+  useEffect(() => {
+    if (!editor || !collab.enabled || !collab.yProvider || !paper) return;
+    const onSynced = () => {
+      const fragment = collab.yDoc?.getXmlFragment("default");
+      const isEmpty = !fragment || fragment.length === 0;
+      // Only seed when the room genuinely has no content yet. Otherwise we
+      // would race with other peers and duplicate their work.
+      if (isEmpty) {
+        editor.commands.setContent(paper.html, { emitUpdate: false });
+      }
+    };
+    collab.yProvider.on("synced", onSynced);
+    return () => {
+      collab.yProvider?.off("synced", onSynced);
+    };
+  }, [editor, collab.enabled, collab.yProvider, collab.yDoc, paper]);
 
   // Command palette → math: open the slash menu's math form at the cursor.
   useEffect(() => {

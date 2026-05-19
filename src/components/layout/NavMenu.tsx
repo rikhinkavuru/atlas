@@ -139,6 +139,12 @@ function getMenus(): Record<string, MenuItem[]> {
           window.dispatchEvent(new CustomEvent("atlas:open-publish-ledger")),
         disabled: !paper,
       },
+      {
+        label: "Corpus opt-in…",
+        onClick: () =>
+          window.dispatchEvent(new CustomEvent("atlas:open-corpus-optin")),
+        disabled: !paper,
+      },
       { label: "", separator: true },
       {
         label: "Export workspace…",

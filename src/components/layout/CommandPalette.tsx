@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Sigma,
   BookOpenCheck,
+  Beaker,
   ArrowRight,
 } from "lucide-react";
 import { useAtlas } from "@/lib/store";
@@ -197,6 +198,17 @@ export function CommandPalette() {
       run: () => {
         toggle(false);
         window.dispatchEvent(new CustomEvent("atlas:open-publish-ledger"));
+      },
+    },
+    {
+      id: "corpus-optin",
+      title: "Reviewer-Model corpus opt-in",
+      desc: "Choose whether this paper contributes to the next training run",
+      icon: <Beaker className="size-4" />,
+      group: "Provenance",
+      run: () => {
+        toggle(false);
+        window.dispatchEvent(new CustomEvent("atlas:open-corpus-optin"));
       },
     },
     {

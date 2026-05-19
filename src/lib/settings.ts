@@ -28,6 +28,12 @@ export interface Settings {
   focusMode: boolean;
   /** Render the 2px provenance left-border on top-level blocks. Default on. */
   showBlockProvenance: boolean;
+  /** Reviewer-Model corpus opt-in default for new papers. The `corpusOptIn`
+   * field below tracks the per-paper override on top of this default. */
+  corpusOptInDefault: boolean;
+  /** Per-paper opt-in. Keyed by paperId; presence in the map means the user
+   * has made an explicit choice (overrides the default). */
+  corpusOptIn: Record<string, boolean>;
   lab: Lab | null;
 }
 
@@ -49,6 +55,9 @@ interface SettingsState extends Settings {
   setAgentPanelWidth: (w: number) => void;
   toggleFocusMode: (open?: boolean) => void;
   toggleShowBlockProvenance: () => void;
+  toggleCorpusOptInDefault: () => void;
+  setCorpusOptIn: (paperId: string, value: boolean | null) => void;
+  isCorpusOptedIn: (paperId: string) => boolean;
   setLab: (lab: Lab | null) => void;
   patchLab: (patch: Partial<Lab>) => void;
   reset: () => void;
@@ -72,12 +81,17 @@ const defaults: Settings = {
   agentPanelWidth: 420,
   focusMode: false,
   showBlockProvenance: true,
+  // Reviewer-Model corpus opt-in is OFF by default — promise is "stay-out is
+  // the default and we don't penalise you for it". User flips this globally
+  // OR per-paper, and the per-paper override beats the default.
+  corpusOptInDefault: false,
+  corpusOptIn: {},
   lab: null,
 };
 
 export const useSettings = create<SettingsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       ...defaults,
       setTheme: (theme) => {
         set({ theme });
@@ -108,6 +122,23 @@ export const useSettings = create<SettingsState>()(
         set((s) => ({ focusMode: open ?? !s.focusMode })),
       toggleShowBlockProvenance: () =>
         set((s) => ({ showBlockProvenance: !s.showBlockProvenance })),
+      toggleCorpusOptInDefault: () =>
+        set((s) => ({ corpusOptInDefault: !s.corpusOptInDefault })),
+      setCorpusOptIn: (paperId, value) =>
+        set((s) => {
+          const next = { ...s.corpusOptIn };
+          if (value === null) delete next[paperId];
+          else next[paperId] = value;
+          return { corpusOptIn: next };
+        }),
+      isCorpusOptedIn: (paperId) => {
+        const s = get();
+        // Per-paper override beats the global default. `undefined` means the
+        // user hasn't decided for this paper yet → fall through to default.
+        const override = s.corpusOptIn[paperId];
+        if (typeof override === "boolean") return override;
+        return s.corpusOptInDefault;
+      },
       setLab: (lab) => set({ lab }),
       patchLab: (patch) =>
         set((s) => ({

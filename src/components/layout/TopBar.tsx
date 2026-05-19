@@ -20,6 +20,7 @@ import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/cn";
 import { NavMenuBar } from "./NavMenu";
 import { TrustMeter } from "./TrustMeter";
+import { PresenceChips } from "../collab/PresenceChips";
 
 export function TopBar() {
   const agentOpen = useAtlas((s) => s.agentOpen);
@@ -89,6 +90,9 @@ export function TopBar() {
         </button>
 
         <span className="mx-1 h-4 w-px bg-border" />
+
+        {/* Presence — collab status chip; renders nothing in single-author mode. */}
+        <PresenceChips />
 
         {/* Trust Meter — the moat status badge, anchored before utility cluster */}
         <TrustMeter />

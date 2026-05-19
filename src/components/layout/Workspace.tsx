@@ -26,6 +26,7 @@ import { WelcomeModal } from "../onboarding/WelcomeModal";
 import { NavDialogs } from "./NavDialogs";
 import { PublishLedgerDialog } from "./PublishLedgerDialog";
 import { ReferencesDialog } from "./ReferencesDialog";
+import { CorpusOptInDialog } from "./CorpusOptInDialog";
 import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 
@@ -180,6 +181,7 @@ function WorkspaceInner() {
       <NavDialogs />
       <PublishLedgerDialog />
       <ReferencesDialog />
+      <CorpusOptInDialog />
     </div>
   );
 }
