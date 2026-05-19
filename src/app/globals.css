@@ -425,6 +425,28 @@ body {
   font-size: 1.05em;
 }
 
+/* Style-coach inline underlines — yellow dotted for suggestions, amber
+   wavy for warnings (passive voice). Hidden by default; the
+   `.show-style-coach` class on .tiptap reveals them. Native browser
+   spellcheck still runs underneath this layer. */
+.tiptap .atlas-style {
+  text-decoration: none;
+}
+.tiptap.show-style-coach .atlas-style-suggestion {
+  text-decoration: underline dotted;
+  text-decoration-color: color-mix(in srgb, var(--warning) 65%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+.tiptap.show-style-coach .atlas-style-warning {
+  text-decoration: underline wavy;
+  text-decoration-color: color-mix(in srgb, var(--warning) 80%, transparent);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  cursor: help;
+}
+
 /* Section-number prefix — widget decoration inserted before every
    heading by SectionNumbers plugin. Hidden by default; the
    `.show-section-numbers` class on the .tiptap container flips them on.

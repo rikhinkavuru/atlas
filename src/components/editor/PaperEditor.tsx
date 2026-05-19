@@ -36,6 +36,7 @@ import { TableCaption } from "./table-caption";
 import { XRef } from "./xref";
 import { HeadingLabels } from "./heading-labels";
 import { SectionNumbers } from "./section-numbers";
+import { StyleCoach } from "./style-coach";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import "katex/dist/katex.min.css";
@@ -44,6 +45,11 @@ import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/cn";
 import { useCollab } from "../collab/CollabProvider";
+import {
+  SNAPSHOT_INTERVAL_MS,
+  recordSnapshot,
+  htmlStats,
+} from "@/lib/recovery";
 
 // Last-seen char count per paper. Drives the wordsDelta/charsDelta in author
 // edit log entries — diffing the current paper against the previous keystroke
@@ -112,6 +118,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
   const setSelection = useAtlas((s) => s.setSelection);
   const showBlockProvenance = useSettings((s) => s.showBlockProvenance);
   const showSectionNumbers = useSettings((s) => s.showSectionNumbers);
+  const showStyleCoach = useSettings((s) => s.showStyleCoach);
   const collab = useCollab();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [bubble, setBubble] = useState<{
@@ -166,6 +173,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
       XRef,
       HeadingLabels,
       SectionNumbers,
+      StyleCoach,
       // Markdown-style math input rules: $$...$$ → block, $...$ → inline.
       // Fires when the user types the closing delimiter.
       MathInputRules,
@@ -201,6 +209,7 @@ export function PaperEditor({ tab }: { tab: Tab }) {
           "tiptap",
           !showBlockProvenance && "no-block-prov",
           showSectionNumbers && "show-section-numbers",
+          showStyleCoach && "show-style-coach",
         ),
       },
       handleKeyDown(view, event) {
@@ -301,6 +310,34 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     };
   }, [editor]);
 
+  // Recovery snapshots — capture the current paper HTML to localStorage on
+  // a throttled cadence so the user can roll back if something gets
+  // destroyed (paste accident, agent edit they regret, etc.). One snapshot
+  // per paper at most every SNAPSHOT_INTERVAL_MS; the manager caps the
+  // rolling window so localStorage doesn't grow unbounded.
+  //
+  // IMPORTANT: the effect must depend ONLY on tab.paperId, not on `paper`.
+  // Depending on `paper` would restart the interval on every keystroke
+  // (since each edit mutates the paper object), so a constantly-typing
+  // user would never get a snapshot. The closure reads
+  // useAtlas.getState() inside the tick so it always sees the live state.
+  useEffect(() => {
+    if (!tab.paperId) return;
+    const id = window.setInterval(() => {
+      const current = useAtlas.getState().papers[tab.paperId!];
+      if (!current) return;
+      const stats = htmlStats(current.html);
+      recordSnapshot({
+        paperId: current.id,
+        takenAt: new Date().toISOString(),
+        html: current.html,
+        words: stats.words,
+        chars: stats.chars,
+      });
+    }, SNAPSHOT_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [tab.paperId]);
+
   // Seed the per-paper baseline for the track-changes pulse the moment we
   // know which paper this editor instance is for. Without this, the first
   // keystroke on an opened paper would record a delta equal to the full
@@ -370,7 +407,8 @@ export function PaperEditor({ tab }: { tab: Tab }) {
     const dom = editor.view.dom as HTMLElement;
     dom.classList.toggle("no-block-prov", !showBlockProvenance);
     dom.classList.toggle("show-section-numbers", showSectionNumbers);
-  }, [editor, showBlockProvenance, showSectionNumbers]);
+    dom.classList.toggle("show-style-coach", showStyleCoach);
+  }, [editor, showBlockProvenance, showSectionNumbers, showStyleCoach]);
 
   // Tag headings with anchor ids for outline scroll
   useEffect(() => {

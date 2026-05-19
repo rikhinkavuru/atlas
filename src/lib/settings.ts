@@ -32,6 +32,9 @@ export interface Settings {
    *  not every paper format wants visible inline numbers; sections still
    *  get numbered in xref output and LaTeX export regardless. */
   showSectionNumbers: boolean;
+  /** Show inline style-coach underlines (filler, weasel, passive voice).
+   *  Default on — these are subtle enough to be useful without nagging. */
+  showStyleCoach: boolean;
   /** Reviewer-Model corpus opt-in default for new papers. The `corpusOptIn`
    * field below tracks the per-paper override on top of this default. */
   corpusOptInDefault: boolean;
@@ -67,6 +70,7 @@ interface SettingsState extends Settings {
   toggleFocusMode: (open?: boolean) => void;
   toggleShowBlockProvenance: () => void;
   toggleShowSectionNumbers: () => void;
+  toggleShowStyleCoach: () => void;
   toggleCorpusOptInDefault: () => void;
   setCorpusOptIn: (paperId: string, value: boolean | null) => void;
   isCorpusOptedIn: (paperId: string) => boolean;
@@ -96,6 +100,7 @@ const defaults: Settings = {
   focusMode: false,
   showBlockProvenance: true,
   showSectionNumbers: false,
+  showStyleCoach: true,
   // Reviewer-Model corpus opt-in is OFF by default — promise is "stay-out is
   // the default and we don't penalise you for it". User flips this globally
   // OR per-paper, and the per-paper override beats the default.
@@ -141,6 +146,8 @@ export const useSettings = create<SettingsState>()(
         set((s) => ({ showBlockProvenance: !s.showBlockProvenance })),
       toggleShowSectionNumbers: () =>
         set((s) => ({ showSectionNumbers: !s.showSectionNumbers })),
+      toggleShowStyleCoach: () =>
+        set((s) => ({ showStyleCoach: !s.showStyleCoach })),
       toggleCorpusOptInDefault: () =>
         set((s) => ({ corpusOptInDefault: !s.corpusOptInDefault })),
       setCorpusOptIn: (paperId, value) =>

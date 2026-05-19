@@ -403,6 +403,23 @@ export function SettingsModal({ open, onClose }: Props) {
                           </span>
                         </span>
                       </label>
+                      <label className="flex items-center gap-2 text-[13px] mt-2">
+                        <input
+                          type="checkbox"
+                          checked={settings.showStyleCoach}
+                          onChange={settings.toggleShowStyleCoach}
+                          className="accent-accent"
+                        />
+                        <span className="flex-1">
+                          Inline style coach
+                          <span className="block text-[11px] text-subtle leading-tight mt-0.5">
+                            Underlines filler ("in order to"), weasel words
+                            ("very", "really"), passive voice. Hover for the
+                            suggested fix. Browser spell-check still runs
+                            underneath.
+                          </span>
+                        </span>
+                      </label>
                     </Field>
                   </div>
                 )}

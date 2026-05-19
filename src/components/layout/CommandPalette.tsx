@@ -14,6 +14,7 @@ import {
   BookOpenCheck,
   Beaker,
   Package,
+  History,
   ArrowRight,
 } from "lucide-react";
 import { useAtlas } from "@/lib/store";
@@ -199,6 +200,17 @@ export function CommandPalette() {
       run: () => {
         toggle(false);
         window.dispatchEvent(new CustomEvent("atlas:open-publish-ledger"));
+      },
+    },
+    {
+      id: "recover-version",
+      title: "Recover previous version",
+      desc: "Browse the last 5 snapshots and roll back",
+      icon: <History className="size-4" />,
+      group: "Workspace",
+      run: () => {
+        toggle(false);
+        window.dispatchEvent(new CustomEvent("atlas:open-recovery"));
       },
     },
     {

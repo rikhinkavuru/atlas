@@ -146,6 +146,12 @@ function getMenus(): Record<string, MenuItem[]> {
         disabled: !paper,
       },
       {
+        label: "Recover previous version…",
+        onClick: () =>
+          window.dispatchEvent(new CustomEvent("atlas:open-recovery")),
+        disabled: !paper,
+      },
+      {
         label: "Corpus opt-in…",
         onClick: () =>
           window.dispatchEvent(new CustomEvent("atlas:open-corpus-optin")),

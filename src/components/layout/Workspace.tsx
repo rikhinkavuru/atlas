@@ -28,6 +28,7 @@ import { PublishLedgerDialog } from "./PublishLedgerDialog";
 import { ReferencesDialog } from "./ReferencesDialog";
 import { CorpusOptInDialog } from "./CorpusOptInDialog";
 import { ArxivBundleDialog } from "./ArxivBundleDialog";
+import { RecoveryDialog } from "./RecoveryDialog";
 import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 
@@ -184,6 +185,7 @@ function WorkspaceInner() {
       <ReferencesDialog />
       <CorpusOptInDialog />
       <ArxivBundleDialog />
+      <RecoveryDialog />
     </div>
   );
 }
