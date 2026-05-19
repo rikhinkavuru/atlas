@@ -37,6 +37,7 @@ export function TopBar() {
 
   const hasKey =
     provider === "mock" ||
+    provider === "ollama" ||
     (provider === "openai" && openaiKey) ||
     (provider === "anthropic" && anthropicKey);
 

@@ -146,6 +146,12 @@ function getMenus(): Record<string, MenuItem[]> {
         disabled: !paper,
       },
       {
+        label: "Sign AI-use attestation…",
+        onClick: () =>
+          window.dispatchEvent(new CustomEvent("atlas:open-authorship")),
+        disabled: !paper,
+      },
+      {
         label: "Recover previous version…",
         onClick: () =>
           window.dispatchEvent(new CustomEvent("atlas:open-recovery")),

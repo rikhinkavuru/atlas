@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
 import type { ReviewerItem } from "@/types";
+import { ollamaChat } from "@/lib/ollama";
 
 export const runtime = "nodejs";
 
-type Provider = "openai" | "anthropic" | "mock";
+type Provider = "openai" | "anthropic" | "ollama" | "mock";
 
 const SYSTEM = `You parse reviewer comment dumps for academic manuscripts. The user pastes raw reviewer text — possibly from PDF, OpenReview, email, or a journal editor. Your job is to identify discrete comments and structure them.
 
@@ -32,9 +33,17 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-openai-key") || process.env.OPENAI_API_KEY || "";
   const anthropicKey =
     req.headers.get("x-anthropic-key") || process.env.ANTHROPIC_API_KEY || "";
+  const ollamaUrl =
+    req.headers.get("x-ollama-url") ||
+    process.env.OLLAMA_URL ||
+    "http://localhost:11434";
   const model =
     req.headers.get("x-model") ||
-    (provider === "anthropic" ? "claude-haiku-4-5-20251001" : "gpt-4o-mini");
+    (provider === "anthropic"
+      ? "claude-haiku-4-5-20251001"
+      : provider === "ollama"
+        ? "llama3.2"
+        : "gpt-4o-mini");
 
   if (!rawText || rawText.trim().length === 0) {
     return Response.json({ items: [] });
@@ -46,6 +55,8 @@ export async function POST(req: NextRequest) {
       items = (await callOpenAI(model, openaiKey, rawText)) ?? [];
     } else if (provider === "anthropic" && anthropicKey) {
       items = (await callAnthropic(model, anthropicKey, rawText)) ?? [];
+    } else if (provider === "ollama") {
+      items = (await callOllama(model, ollamaUrl, rawText)) ?? [];
     }
     if (items.length === 0) {
       items = heuristicParse(rawText);
@@ -119,6 +130,28 @@ async function callAnthropic(
   if (!r.ok) return null;
   const data = (await r.json()) as any;
   return parseItems(data.content?.[0]?.text ?? "{}");
+}
+
+async function callOllama(
+  model: string,
+  url: string,
+  raw: string,
+): Promise<Omit<ReviewerItem, "id" | "response" | "status">[] | null> {
+  try {
+    const text = await ollamaChat({
+      url,
+      model,
+      temperature: 0.1,
+      jsonMode: true,
+      messages: [
+        { role: "system", content: SYSTEM },
+        { role: "user", content: raw },
+      ],
+    });
+    return parseItems(text);
+  } catch {
+    return null;
+  }
 }
 
 function parseItems(raw: string) {

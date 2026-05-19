@@ -31,7 +31,8 @@ const TIERS: {
 }[] = [
   {
     name: "Free",
-    blurb: "Single-author. BYOK. Everything in your browser.",
+    blurb:
+      "Single-author. Local-first. Everything that runs in your browser.",
     price: "$0",
     period: "forever",
     cta: "Start free",
@@ -39,10 +40,11 @@ const TIERS: {
     highlighted: false,
     features: [
       "Full editor + agent + Paper Critic + Reviewer-2 simulator",
-      "Bring your own OpenAI / Anthropic key",
-      "PDF import, LaTeX export, math equations, voice profile",
+      "Bring your own OpenAI / Anthropic key — or run Ollama locally for $0",
+      "Venue rubrics (NeurIPS / ICLR / ACL / Nature / JAMA / Cell) + calibration vs live OpenReview",
       "Provenance Ledger + signed events + /verify viewer",
       "Lab Capsule export / import (members, rules, voice, library)",
+      "PDF import, LaTeX export, math equations, figures, cross-references",
       "Bibliography in APA / Chicago / MLA / Vancouver / IEEE",
       "Drafts never leave your browser",
     ],
@@ -97,7 +99,7 @@ const TIERS: {
       { text: "Self-hosted ledger storage (Postgres / S3-compatible)", status: "roadmap" },
       { text: "SSO via SAML / OIDC; SCIM provisioning", status: "roadmap" },
       { text: "Audit logs + retention controls", status: "roadmap" },
-      { text: "Dedicated Reviewer-Model fine-tune access", status: "roadmap" },
+      { text: "Custom rubric tuning + per-venue calibration reports", status: "roadmap" },
       "Priority issue routing + named onboarding",
     ],
   },
@@ -119,7 +121,7 @@ export function Pricing() {
         <SectionHeader
           eyebrow="Pricing"
           title="Free for one researcher. Fair for a lab."
-          body="Everything that runs in your browser is free, forever. Pro adds managed AI + sync. Lab adds realtime multi-user."
+          body="Everything that runs in your browser is free, forever — including the agent, Paper Critic, Reviewer-2 simulator, and provenance ledger. Pair it with Ollama for $0/token. Pro adds public ledger URLs + managed citation verification. Lab adds realtime multi-user."
         />
         <motion.div
           initial="hidden"

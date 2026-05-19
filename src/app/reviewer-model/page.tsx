@@ -4,9 +4,9 @@ import { Footer } from "@/components/landing/Footer";
 import { ReviewerModelClient } from "./ReviewerModelClient";
 
 export const metadata = {
-  title: "Atlas — The Atlas Reviewer Model (roadmap)",
+  title: "Atlas — Venue rubrics + Reviewer-2 simulator",
   description:
-    "We are training a domain-specific reviewer model on the public OpenReview / ACL / arXiv-public-review corpora. Here is exactly what is shipped today, what is on the roadmap, and how to opt-in to the training corpus.",
+    "Atlas ships venue rubrics, a heuristic Reviewer-2 simulator, and a live calibration harness against OpenReview decisions — all free, all today. A domain-specific trained model is on the long-term roadmap; this page documents both what is shipped and what we have NOT built.",
 };
 
 const CORPUS = [
@@ -79,22 +79,24 @@ export default function ReviewerModelPage() {
       <main className="pt-28 pb-20 px-5">
         <div className="max-w-[1000px] mx-auto">
           <div className="flex items-center gap-3 mb-3 text-[11px] font-mono uppercase tracking-[0.22em]">
-            <span className="text-accent">The Atlas Reviewer Model</span>
+            <span className="text-accent">Venue rubrics + Reviewer-2 simulator</span>
             <span className="h-px w-6 bg-border" />
-            <span className="text-warning">Roadmap · not yet shipped</span>
+            <span className="text-accent">Shipped · free</span>
           </div>
           <h1 className="text-[44px] sm:text-[56px] leading-[1.05] tracking-[-0.025em] font-semibold">
-            A reviewer-2 simulator that&apos;s actually trained on reviewer-2s.
+            A reviewer-2 simulator, venue-aware and honest about it.
           </h1>
           <p className="mt-5 max-w-[680px] text-[15px] text-muted leading-relaxed">
-            General-purpose LLMs do a passable Reviewer-2 impression. The
-            Atlas Reviewer Model aims to do it for real — by fine-tuning a
-            domain-specific trunk on the public OpenReview, ACL Anthology, and
-            arXiv-with-public-review corpora, with venue-specific heads. The
-            page below names exactly what is shipped today (the heuristic
-            forecast in the workspace, the opt-in flow on this page, the
-            corpus pipeline as a public spec) and what is still on the
-            roadmap.
+            Atlas ships a heuristic Reviewer-2 today: seven venue rubrics
+            (NeurIPS, ICLR, ACL, Nature, JAMA, Cell, generic) → a forecast
+            score → predicted reviewer questions → a calibration card that
+            grades Atlas&apos;s predictions against live OpenReview decisions.
+            All free. All today. No paid API call required when you run it
+            against your local Ollama. A domain-specific trained model
+            (corpus + venue heads) is on the long-term roadmap; we have
+            <strong className="text-foreground">&nbsp;not&nbsp;</strong>
+            shipped it. The corpus spec below is a public statement of intent,
+            not a release.
           </p>
 
           <Section title="What ships today">

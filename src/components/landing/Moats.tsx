@@ -11,7 +11,7 @@ import {
   Library,
   Inbox,
   Target,
-  Cpu,
+  FileSignature,
 } from "lucide-react";
 import { SectionHeader } from "./Features";
 
@@ -19,17 +19,17 @@ const EASE = [0.2, 0.7, 0.2, 1] as [number, number, number, number];
 
 const MOATS = [
   {
-    eyebrow: "Moat · 01 — roadmap",
-    icon: <Cpu className="size-5" />,
-    title: "The Atlas Reviewer Model",
-    body: "A reviewer fine-tuned on OpenReview, ACL Anthology, and arXiv public reviews — with venue-specific heads. Not yet trained: the corpus, the heads, and the opt-in flow are public today.",
+    eyebrow: "Moat · 01 — shipped",
+    icon: <FileSignature className="size-5" />,
+    title: "The Authorship Ledger",
+    body: "A signed, reviewer-verifiable disclosure of how much of your manuscript was written by you vs. AI. Built on the provenance chain; ready-made venue text for NeurIPS, Nature, ACL, ICML.",
     bullets: [
-      "Five-source corpus, each license + ingestion stage disclosed",
-      "Seven venue heads on a public roadmap — no fake training pills",
-      "Opt-in flow live; revocation logged with a timestamp",
+      "Per-paper breakdown — human / AI-sourced / AI-unsourced / imported",
+      "ECDSA-P256 signed with your workspace key — Atlas can't forge it",
+      "Pre-baked disclosure text for the venues that require it",
     ],
-    link: { href: "/reviewer-model", label: "Read the roadmap" },
-    Visual: ReviewerModelVisual,
+    link: { href: "/authorship", label: "See how it works" },
+    Visual: AuthorshipVisual,
   },
   {
     eyebrow: "Moat · 02",
@@ -76,7 +76,7 @@ export function Moats() {
         <SectionHeader
           eyebrow="What makes Atlas unreplicable"
           title="Three moats. Each one names the artifact."
-          body="One ships today as a hash-chained ledger anyone can verify. One is a public roadmap with the corpus and opt-in flow live. One ships today as a portable lab capsule."
+          body="Three signed records — what the AI did, who wrote what, how your lab works — that competitors can't ship without rebuilding the editor underneath. All three are shipped today, all three are verifiable."
         />
         <div className="mt-24 space-y-32">
           {MOATS.map((m, i) => (
@@ -180,70 +180,83 @@ const visualVariant = {
   },
 };
 
-function ReviewerModelVisual() {
-  const heads = [
-    "NeurIPS / ICML",
-    "ICLR",
-    "ACL / EMNLP",
-    "Nature / Science",
-    "JAMA / NEJM",
-    "Cell / Mol Bio",
-    "PhD thesis chapter",
-  ];
-  const corpus = [
-    { name: "OpenReview", stage: "ingestion in progress" },
-    { name: "ACL Anthology", stage: "schema mapped" },
-    { name: "arXiv public reviews", stage: "spec drafted" },
-    { name: "Accepted-paper diffs", stage: "prototype tooling" },
-    { name: "Atlas user signal", stage: "opt-in flow live" },
+function AuthorshipVisual() {
+  const rows = [
+    { label: "Human author", value: 62.4, tone: "accent" as const },
+    { label: "AI · sourced", value: 18.1, tone: "info" as const },
+    { label: "AI · unsourced", value: 11.3, tone: "warning" as const },
+    { label: "Imported", value: 8.2, tone: "subtle" as const },
   ];
   return (
     <div className="panel rounded-xl overflow-hidden shadow-[0_30px_80px_-30px_rgba(0,0,0,0.4)]">
       <div className="h-7 px-3 flex items-center gap-2 border-b border-border bg-surface-2 text-[10px] font-mono uppercase tracking-[0.15em] text-subtle">
-        <span className="size-1.5 rounded-full bg-warning" />
-        atlas reviewer model · roadmap
+        <span className="size-1.5 rounded-full bg-accent" />
+        atlas authorship attestation · neurips disclosure
       </div>
       <div className="p-5 space-y-4">
         <div>
           <div className="text-[10px] uppercase tracking-[0.15em] text-subtle font-mono mb-2">
-            Target corpus
+            Breakdown · 18,420 chars
+          </div>
+          <div className="h-1.5 rounded-full overflow-hidden bg-surface-2 flex mb-3">
+            {rows.map((r) => (
+              <span
+                key={r.label}
+                className={
+                  r.tone === "accent"
+                    ? "bg-accent"
+                    : r.tone === "info"
+                      ? "bg-info"
+                      : r.tone === "warning"
+                        ? "bg-warning"
+                        : "bg-subtle"
+                }
+                style={{ width: `${r.value}%` }}
+              />
+            ))}
           </div>
           <ul className="space-y-1.5">
-            {corpus.map((c, i) => (
+            {rows.map((r, i) => (
               <motion.li
-                key={c.name}
+                key={r.label}
                 initial={{ opacity: 0, x: -6 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
                 transition={{ delay: 0.05 * i, duration: 0.35 }}
                 className="flex items-center gap-2 text-[11.5px]"
               >
-                <span className="size-1.5 rounded-full bg-accent" />
-                <span className="text-foreground flex-1">{c.name}</span>
-                <span className="text-subtle font-mono">{c.stage}</span>
+                <span
+                  className={
+                    r.tone === "accent"
+                      ? "size-1.5 rounded-full bg-accent"
+                      : r.tone === "info"
+                        ? "size-1.5 rounded-full bg-info"
+                        : r.tone === "warning"
+                          ? "size-1.5 rounded-full bg-warning"
+                          : "size-1.5 rounded-full bg-subtle"
+                  }
+                />
+                <span className="text-foreground flex-1">{r.label}</span>
+                <span className="text-subtle font-mono tabular-nums">
+                  {r.value.toFixed(1)}%
+                </span>
               </motion.li>
             ))}
           </ul>
         </div>
-        <div className="pt-3 border-t border-border">
-          <div className="text-[10px] uppercase tracking-[0.15em] text-subtle font-mono mb-2">
-            Heads on the roadmap
+        <div className="pt-3 border-t border-border space-y-1.5 text-[10.5px] font-mono text-subtle">
+          <div className="flex justify-between gap-3">
+            <span>signature</span>
+            <span className="text-accent">valid · key fp 3b81…</span>
           </div>
-          <ul className="flex flex-wrap gap-1.5">
-            {heads.map((h) => (
-              <li
-                key={h}
-                className="px-2 py-0.5 text-[10.5px] font-mono uppercase tracking-[0.1em] rounded-full border border-border bg-surface text-subtle"
-              >
-                {h}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="pt-3 border-t border-border text-[10.5px] text-subtle">
-          When measurable numbers exist they appear on{" "}
-          <span className="text-foreground">/reviewer-model</span> and{" "}
-          <span className="text-foreground">/docs#changelog</span> the same day.
+          <div className="flex justify-between gap-3">
+            <span>ledger root</span>
+            <span className="text-foreground truncate">e0c742aa…fb</span>
+          </div>
+          <div className="flex justify-between gap-3">
+            <span>orcid</span>
+            <span className="text-foreground">0000-0002-1825-0097</span>
+          </div>
         </div>
       </div>
     </div>

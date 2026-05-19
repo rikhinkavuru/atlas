@@ -36,6 +36,8 @@ export function Hero() {
           >
             <span className="size-1 rounded-full bg-accent animate-pulse-soft" />
             <span>Every AI edit signed · sourced · on the record</span>
+            <span className="text-subtle/60">·</span>
+            <span className="text-subtle">free with Ollama or BYOK</span>
           </motion.div>
 
           <h1 className="text-[56px] sm:text-[80px] leading-[1.02] font-semibold tracking-[-0.03em] text-foreground">

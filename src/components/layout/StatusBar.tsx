@@ -20,6 +20,7 @@ export function StatusBar() {
   const provider = useSettings((s) => s.provider);
   const openaiModel = useSettings((s) => s.openaiModel);
   const anthropicModel = useSettings((s) => s.anthropicModel);
+  const ollamaModel = useSettings((s) => s.ollamaModel);
   const toggleSettings = useAtlas((s) => s.toggleSettings);
   const toggleAnalyzer = useAtlas((s) => s.toggleAnalyzer);
   const model =
@@ -27,7 +28,9 @@ export function StatusBar() {
       ? openaiModel
       : provider === "anthropic"
         ? anthropicModel
-        : "mock";
+        : provider === "ollama"
+          ? ollamaModel
+          : "mock";
 
   // savedAgo fades out after a quiet period — once the user trusts that the
   // app saves, repeating "saved 2m ago" forever is just noise. Show it for 5s

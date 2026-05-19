@@ -31,6 +31,7 @@ import { ReferencesDialog } from "./ReferencesDialog";
 import { CorpusOptInDialog } from "./CorpusOptInDialog";
 import { ArxivBundleDialog } from "./ArxivBundleDialog";
 import { RecoveryDialog } from "./RecoveryDialog";
+import { AuthorshipDialog } from "./AuthorshipDialog";
 import { useAtlas } from "@/lib/store";
 import { useSettings } from "@/lib/settings";
 
@@ -190,6 +191,7 @@ function WorkspaceInner() {
       <CorpusOptInDialog />
       <ArxivBundleDialog />
       <RecoveryDialog />
+      <AuthorshipDialog />
     </div>
   );
 }

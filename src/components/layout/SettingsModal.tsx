@@ -64,6 +64,17 @@ const ANTHROPIC_MODELS = [
   { id: "claude-opus-4-7", label: "Claude Opus 4.7 — strongest" },
 ];
 
+// Common Ollama tags ordered by quality-per-RAM. Users with more VRAM can
+// also type a custom tag — the model field is editable, not a hard select.
+const OLLAMA_MODEL_SUGGESTIONS = [
+  { id: "llama3.2", label: "llama3.2 (3B — laptop friendly)" },
+  { id: "llama3.1:8b", label: "llama3.1 8B (good general)" },
+  { id: "qwen2.5:7b", label: "qwen2.5 7B (strong reasoning)" },
+  { id: "qwen2.5:14b", label: "qwen2.5 14B (needs ≥16 GB)" },
+  { id: "mistral-nemo", label: "mistral-nemo 12B" },
+  { id: "phi3.5", label: "phi3.5 (tiny, fast)" },
+];
+
 export function SettingsModal({ open, onClose }: Props) {
   const settings = useSettings();
   const [section, setSection] = useState<Section>("keys");
@@ -261,27 +272,29 @@ export function SettingsModal({ open, onClose }: Props) {
                       label="Provider"
                       hint="Which API to use for the agent and analyzer."
                     >
-                      <div className="grid grid-cols-3 gap-1 p-0.5 bg-background border border-border rounded-md">
-                        {(["openai", "anthropic", "mock"] as Provider[]).map(
-                          (p) => (
-                            <button
-                              key={p}
-                              onClick={() => settings.setProvider(p)}
-                              className={cn(
-                                "h-8 rounded text-[11.5px] font-medium",
-                                settings.provider === p
-                                  ? "bg-accent text-accent-fg"
-                                  : "text-muted hover:text-foreground",
-                              )}
-                            >
-                              {p === "openai"
-                                ? "OpenAI"
-                                : p === "anthropic"
-                                  ? "Anthropic"
+                      <div className="grid grid-cols-4 gap-1 p-0.5 bg-background border border-border rounded-md">
+                        {(
+                          ["openai", "anthropic", "ollama", "mock"] as Provider[]
+                        ).map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => settings.setProvider(p)}
+                            className={cn(
+                              "h-8 rounded text-[11.5px] font-medium",
+                              settings.provider === p
+                                ? "bg-accent text-accent-fg"
+                                : "text-muted hover:text-foreground",
+                            )}
+                          >
+                            {p === "openai"
+                              ? "OpenAI"
+                              : p === "anthropic"
+                                ? "Anthropic"
+                                : p === "ollama"
+                                  ? "Ollama"
                                   : "Mock"}
-                            </button>
-                          ),
-                        )}
+                          </button>
+                        ))}
                       </div>
                     </Field>
                     {settings.provider === "openai" && (
@@ -307,6 +320,9 @@ export function SettingsModal({ open, onClose }: Props) {
                           options={ANTHROPIC_MODELS}
                         />
                       </Field>
+                    )}
+                    {settings.provider === "ollama" && (
+                      <OllamaProviderFields />
                     )}
                     {settings.provider === "mock" && (
                       <div className="text-[12px] text-muted bg-surface-2 border border-border rounded-md p-3">
@@ -579,6 +595,160 @@ function KeyField({
         </button>
       </div>
     </Field>
+  );
+}
+
+function OllamaProviderFields() {
+  const ollamaUrl = useSettings((s) => s.ollamaUrl);
+  const setOllamaUrl = useSettings((s) => s.setOllamaUrl);
+  const ollamaModel = useSettings((s) => s.ollamaModel);
+  const setOllamaModel = useSettings((s) => s.setOllamaModel);
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<{
+    ok: boolean;
+    message: string;
+  } | null>(null);
+
+  async function probe() {
+    setProbing(true);
+    setProbeResult(null);
+    try {
+      // Ollama daemon does NOT enable CORS by default. A direct browser fetch
+      // against localhost:11434 will fail with a CORS error even when the
+      // daemon is healthy. So we either hit a permissive daemon (user ran
+      // OLLAMA_ORIGINS=*) or we'll fail with a clear hint below. We try
+      // direct first since most users running this LOCALLY have CORS open.
+      const base = (ollamaUrl || "http://localhost:11434").replace(/\/+$/, "");
+      const res = await fetch(`${base}/api/tags`);
+      if (!res.ok) {
+        setProbeResult({
+          ok: false,
+          message: `Daemon responded ${res.status}. Is Ollama running?`,
+        });
+        return;
+      }
+      const data = (await res.json()) as {
+        models?: Array<{ name: string }>;
+      };
+      const names = (data.models ?? []).map((m) => m.name);
+      const has = names.some(
+        (n) =>
+          n === ollamaModel ||
+          n.startsWith(`${ollamaModel}:`) ||
+          n === `${ollamaModel}:latest`,
+      );
+      if (!names.length) {
+        setProbeResult({
+          ok: false,
+          message: `Connected, but no models pulled. Run: ollama pull ${ollamaModel}`,
+        });
+      } else if (!has) {
+        setProbeResult({
+          ok: false,
+          message: `Connected, but "${ollamaModel}" isn't pulled. Available: ${names.slice(0, 3).join(", ")}${names.length > 3 ? ", …" : ""}`,
+        });
+      } else {
+        setProbeResult({
+          ok: true,
+          message: `Connected. ${names.length} model${names.length === 1 ? "" : "s"} available, "${ollamaModel}" ready.`,
+        });
+      }
+    } catch (err) {
+      // Browser network errors look identical for "daemon down" and "CORS
+      // blocked". CORS is by far the more common failure: Ollama doesn't ship
+      // with permissive origins. Lead with that hint, then the underlying
+      // error message so a quick DevTools peek confirms which it is.
+      setProbeResult({
+        ok: false,
+        message: `Could not reach ${ollamaUrl}. Two likely causes — either the daemon isn't running (start it with \`ollama serve\`), or it's running but blocking this origin via CORS. Fix CORS by relaunching with: OLLAMA_ORIGINS="*" ollama serve. (${err instanceof Error ? err.message : String(err)})`,
+      });
+    } finally {
+      setProbing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <Field
+        label="Daemon URL"
+        hint="Default for a local install is http://localhost:11434. Change this to point at Ollama on another machine."
+      >
+        <input
+          value={ollamaUrl}
+          onChange={(e) => setOllamaUrl(e.target.value)}
+          className="input font-mono text-[12px]"
+          placeholder="http://localhost:11434"
+        />
+      </Field>
+      <Field
+        label="Model tag"
+        hint="The exact tag you ran `ollama pull` for. The dropdown lists common picks but any pulled tag works."
+      >
+        <div className="flex gap-2">
+          <input
+            value={ollamaModel}
+            onChange={(e) => setOllamaModel(e.target.value)}
+            list="atlas-ollama-models"
+            className="input font-mono text-[12px] flex-1"
+            placeholder="llama3.2"
+          />
+          <datalist id="atlas-ollama-models">
+            {OLLAMA_MODEL_SUGGESTIONS.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label}
+              </option>
+            ))}
+          </datalist>
+          <button
+            onClick={probe}
+            disabled={probing}
+            className="btn btn-ghost h-9 text-[12px] whitespace-nowrap"
+          >
+            {probing ? "Probing…" : "Test connection"}
+          </button>
+        </div>
+      </Field>
+      {probeResult && (
+        <div
+          className={cn(
+            "text-[11.5px] rounded-md p-3 border leading-relaxed font-mono",
+            probeResult.ok
+              ? "text-accent bg-accent-soft border-[#2d3d12]"
+              : "text-warning bg-warning-soft border-warning",
+          )}
+        >
+          {probeResult.message}
+        </div>
+      )}
+      <div className="text-[11px] text-subtle bg-surface-2 border border-border rounded-md p-3 leading-relaxed space-y-2">
+        <div>
+          <span className="text-foreground font-medium">First time?</span> Install
+          Ollama from{" "}
+          <a
+            href="https://ollama.com"
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent hover:underline"
+          >
+            ollama.com
+          </a>
+          , then run{" "}
+          <code className="kbd font-mono">ollama pull {ollamaModel}</code> in
+          your terminal. Atlas talks to the daemon over localhost — your drafts
+          never leave your machine.
+        </div>
+        <div>
+          <span className="text-foreground font-medium">CORS note:</span> the
+          Ollama daemon blocks browser requests by default. Start it with{" "}
+          <code className="kbd font-mono">
+            OLLAMA_ORIGINS=&quot;*&quot; ollama serve
+          </code>{" "}
+          (or set the env var permanently) so Atlas can connect from the page.
+          Atlas&apos;s server-side agent route is unaffected and works without
+          this — the browser-side &quot;Test connection&quot; button needs it.
+        </div>
+      </div>
+    </div>
   );
 }
 

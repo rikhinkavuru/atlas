@@ -51,7 +51,7 @@ export function LandingNav() {
         <nav className="hidden md:flex items-center gap-1 text-[13px] text-muted">
           <NavLink href="/#features">Features</NavLink>
           <NavLink href="/#moats">Moats</NavLink>
-          <NavLink href="/reviewer-model">Reviewer Model</NavLink>
+          <NavLink href="/authorship">Authorship</NavLink>
           <NavLink href="/verify">Verify</NavLink>
           <NavLink href="/pricing">Pricing</NavLink>
           <NavLink href="/docs">Docs</NavLink>
@@ -97,8 +97,8 @@ export function LandingNav() {
             <NavLink href="/#moats" onClick={() => setMobileOpen(false)}>
               Moats
             </NavLink>
-            <NavLink href="/reviewer-model" onClick={() => setMobileOpen(false)}>
-              Reviewer Model
+            <NavLink href="/authorship" onClick={() => setMobileOpen(false)}>
+              Authorship
             </NavLink>
             <NavLink href="/verify" onClick={() => setMobileOpen(false)}>
               Verify

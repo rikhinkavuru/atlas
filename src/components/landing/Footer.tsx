@@ -20,9 +20,9 @@ const COLS = [
   {
     title: "Moats",
     links: [
-      { label: "Reviewer Model", href: "/reviewer-model" },
+      { label: "Authorship Ledger", href: "/authorship" },
       { label: "Verify a paper", href: "/verify" },
-      { label: "For reviewers", href: "/for-reviewers" },
+      { label: "Reviewer-2 + rubrics", href: "/reviewer-model" },
       { label: "Provenance schema", href: "/docs#provenance" },
     ],
   },

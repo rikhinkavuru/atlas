@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { formatVoiceForPrompt } from "@/lib/voice";
+import { ollamaChatStream } from "@/lib/ollama";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,7 @@ interface Body {
   requireSources?: boolean;
 }
 
-type Provider = "openai" | "anthropic" | "mock";
+type Provider = "openai" | "anthropic" | "ollama" | "mock";
 
 export async function POST(req: NextRequest) {
   const body = (await req.json()) as Body;
@@ -27,11 +28,17 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-anthropic-key") || process.env.ANTHROPIC_API_KEY || "";
   const niaKey = req.headers.get("x-nia-key") || process.env.NIA_API_KEY || "";
   const venue = req.headers.get("x-venue") ?? "generic";
+  const ollamaUrl =
+    req.headers.get("x-ollama-url") ||
+    process.env.OLLAMA_URL ||
+    "http://localhost:11434";
   const model =
     req.headers.get("x-model") ||
     (provider === "anthropic"
       ? "claude-haiku-4-5-20251001"
-      : "gpt-4o-mini");
+      : provider === "ollama"
+        ? "llama3.2"
+        : "gpt-4o-mini");
 
   const origin = new URL(req.url).origin;
   const encoder = new TextEncoder();
@@ -74,6 +81,11 @@ export async function POST(req: NextRequest) {
             return;
           }
           await anthropicStream(body, extraContext, model, anthropicKey, write, venue);
+          controller.close();
+          return;
+        }
+        if (provider === "ollama") {
+          await ollamaStream(body, extraContext, model, ollamaUrl, write, venue);
           controller.close();
           return;
         }
@@ -358,6 +370,32 @@ async function anthropicStream(
         }
       } catch {}
     }
+  }
+}
+
+async function ollamaStream(
+  body: Body,
+  extraContext: string,
+  model: string,
+  url: string,
+  write: (s: string) => void,
+  venue: string,
+) {
+  try {
+    await ollamaChatStream({
+      url,
+      model,
+      temperature: 0.4,
+      messages: [
+        { role: "system", content: systemPromptFor(body, extraContext, venue) },
+        { role: "user", content: userContentFor(body, extraContext) },
+      ],
+      onText: write,
+    });
+  } catch (err) {
+    write(
+      `\n\n${err instanceof Error ? err.message : String(err)}\n\nOpen Settings (⌘,) → Provider → Ollama to point Atlas at a different URL, or switch back to OpenAI / Anthropic / Mock.`,
+    );
   }
 }
 

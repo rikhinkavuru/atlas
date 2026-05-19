@@ -9,10 +9,11 @@ import {
   rubricForVenue,
   type VenueId,
 } from "@/lib/rubrics";
+import { ollamaChat } from "@/lib/ollama";
 
 export const runtime = "nodejs";
 
-type Provider = "openai" | "anthropic" | "mock";
+type Provider = "openai" | "anthropic" | "ollama" | "mock";
 
 function systemPrompt(rubric: ReturnType<typeof rubricForVenue>) {
   return `You are Atlas, an expert peer-reviewer. You review research-paper drafts against the explicit rubric below. Be specific, evidence-based, and never invent quotes.
@@ -59,11 +60,17 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-openai-key") || process.env.OPENAI_API_KEY || "";
   const anthropicKey =
     req.headers.get("x-anthropic-key") || process.env.ANTHROPIC_API_KEY || "";
+  const ollamaUrl =
+    req.headers.get("x-ollama-url") ||
+    process.env.OLLAMA_URL ||
+    "http://localhost:11434";
   const model =
     req.headers.get("x-model") ||
     (provider === "anthropic"
       ? "claude-haiku-4-5-20251001"
-      : "gpt-4o-mini");
+      : provider === "ollama"
+        ? "llama3.2"
+        : "gpt-4o-mini");
   const venue = (req.headers.get("x-venue") ?? "generic") as VenueId;
   const rubric = rubricForVenue(venue);
 
@@ -81,6 +88,8 @@ export async function POST(req: NextRequest) {
         anthropicKey,
         userMsg,
       );
+    } else if (provider === "ollama") {
+      report = await callOllama(systemPrompt(rubric), model, ollamaUrl, userMsg);
     }
     if (!report) report = heuristicReport(text, rubric);
     report.venue = rubric.name;
@@ -147,6 +156,29 @@ async function callAnthropic(
     content?: { type: string; text?: string }[];
   };
   return parseReport(data.content?.[0]?.text ?? "{}");
+}
+
+async function callOllama(
+  systemPrompt: string,
+  model: string,
+  url: string,
+  userMsg: string,
+): Promise<AnalysisReport | null> {
+  try {
+    const text = await ollamaChat({
+      url,
+      model,
+      temperature: 0.2,
+      jsonMode: true,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMsg },
+      ],
+    });
+    return parseReport(text);
+  } catch {
+    return null;
+  }
 }
 
 function parseReport(raw: string): AnalysisReport | null {

@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
 import { formatVoiceForPrompt } from "@/lib/voice";
+import { ollamaChat } from "@/lib/ollama";
 
 export const runtime = "nodejs";
 
-type Provider = "openai" | "anthropic" | "mock";
+type Provider = "openai" | "anthropic" | "ollama" | "mock";
 
 interface Body {
   comment: string;
@@ -46,9 +47,17 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-openai-key") || process.env.OPENAI_API_KEY || "";
   const anthropicKey =
     req.headers.get("x-anthropic-key") || process.env.ANTHROPIC_API_KEY || "";
+  const ollamaUrl =
+    req.headers.get("x-ollama-url") ||
+    process.env.OLLAMA_URL ||
+    "http://localhost:11434";
   const model =
     req.headers.get("x-model") ||
-    (provider === "anthropic" ? "claude-haiku-4-5-20251001" : "gpt-4o-mini");
+    (provider === "anthropic"
+      ? "claude-haiku-4-5-20251001"
+      : provider === "ollama"
+        ? "llama3.2"
+        : "gpt-4o-mini");
   const voicePrompt = formatVoiceForPrompt(body.voice ?? null);
 
   const docPlain = htmlToText(body.paperHtml ?? "").slice(0, 10000);
@@ -69,6 +78,10 @@ export async function POST(req: NextRequest) {
     }
     if (provider === "anthropic" && anthropicKey) {
       const out = await callAnthropic(model, anthropicKey, user);
+      if (out) return Response.json(out);
+    }
+    if (provider === "ollama") {
+      const out = await callOllama(model, ollamaUrl, user);
       if (out) return Response.json(out);
     }
   } catch {}
@@ -120,6 +133,24 @@ async function callAnthropic(model: string, key: string, user: string) {
   if (!r.ok) return null;
   const data = (await r.json()) as any;
   return parse(data.content?.[0]?.text ?? "{}");
+}
+
+async function callOllama(model: string, url: string, user: string) {
+  try {
+    const text = await ollamaChat({
+      url,
+      model,
+      temperature: 0.3,
+      jsonMode: true,
+      messages: [
+        { role: "system", content: SYSTEM },
+        { role: "user", content: user },
+      ],
+    });
+    return parse(text);
+  } catch {
+    return null;
+  }
 }
 
 function parse(raw: string) {

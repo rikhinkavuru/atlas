@@ -7,7 +7,7 @@ import type { VoiceProfile } from "./voice";
 import type { Lab } from "./lab";
 
 export type Theme = "light" | "dark";
-export type Provider = "openai" | "anthropic" | "mock";
+export type Provider = "openai" | "anthropic" | "ollama" | "mock";
 
 export interface Settings {
   theme: Theme;
@@ -16,6 +16,14 @@ export interface Settings {
   anthropicKey: string;
   openaiModel: string;
   anthropicModel: string;
+  /** Base URL for the local Ollama daemon. Default http://localhost:11434.
+   *  Atlas talks to Ollama via its OpenAI-compatible /v1 endpoint OR the
+   *  native /api/chat — we use the native API so we don't need the user's
+   *  Ollama to be on a recent version. No API key required. */
+  ollamaUrl: string;
+  /** Model tag to send to Ollama (e.g. "llama3.2", "qwen2.5:14b",
+   *  "mistral-nemo"). The user must `ollama pull <tag>` first. */
+  ollamaModel: string;
   showShortcuts: boolean;
   autoSave: boolean;
   venue: VenueId;
@@ -58,6 +66,8 @@ interface SettingsState extends Settings {
   setAnthropicKey: (k: string) => void;
   setOpenAIModel: (m: string) => void;
   setAnthropicModel: (m: string) => void;
+  setOllamaUrl: (u: string) => void;
+  setOllamaModel: (m: string) => void;
   toggleShortcuts: () => void;
   toggleAutoSave: () => void;
   setVenue: (v: VenueId) => void;
@@ -88,6 +98,8 @@ const defaults: Settings = {
   anthropicKey: "",
   openaiModel: "gpt-4o-mini",
   anthropicModel: "claude-haiku-4-5-20251001",
+  ollamaUrl: "http://localhost:11434",
+  ollamaModel: "llama3.2",
   showShortcuts: true,
   autoSave: true,
   venue: "generic",
@@ -126,6 +138,9 @@ export const useSettings = create<SettingsState>()(
       setAnthropicKey: (anthropicKey) => set({ anthropicKey }),
       setOpenAIModel: (openaiModel) => set({ openaiModel }),
       setAnthropicModel: (anthropicModel) => set({ anthropicModel }),
+      setOllamaUrl: (ollamaUrl) =>
+        set({ ollamaUrl: ollamaUrl.replace(/\/+$/, "") }),
+      setOllamaModel: (ollamaModel) => set({ ollamaModel }),
       toggleShortcuts: () => set((s) => ({ showShortcuts: !s.showShortcuts })),
       toggleAutoSave: () => set((s) => ({ autoSave: !s.autoSave })),
       setVenue: (venue) => set({ venue }),
@@ -194,6 +209,10 @@ export function getModelHeaders(): Record<string, string> {
   if (s.provider === "openai" && s.openaiModel) h["x-model"] = s.openaiModel;
   if (s.provider === "anthropic" && s.anthropicModel)
     h["x-model"] = s.anthropicModel;
+  if (s.provider === "ollama") {
+    if (s.ollamaModel) h["x-model"] = s.ollamaModel;
+    if (s.ollamaUrl) h["x-ollama-url"] = s.ollamaUrl;
+  }
   if (s.niaKey) h["x-nia-key"] = s.niaKey;
   if (s.venue) h["x-venue"] = s.venue;
   return h;

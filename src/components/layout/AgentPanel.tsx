@@ -375,7 +375,12 @@ export function AgentPanel() {
       ) {
         summary =
           "Network hiccup reaching the model. Check your connection — your prompt and selection are preserved below.";
-      } else if (!useSettings.getState().openaiKey && !useSettings.getState().anthropicKey && useSettings.getState().provider !== "mock") {
+      } else if (
+        !useSettings.getState().openaiKey &&
+        !useSettings.getState().anthropicKey &&
+        useSettings.getState().provider !== "mock" &&
+        useSettings.getState().provider !== "ollama"
+      ) {
         summary =
           "No API key set. Add one in Settings (⌘,), or switch the provider to Mock to try Atlas without a key.";
       } else {
@@ -447,7 +452,9 @@ export function AgentPanel() {
         ? s.openaiModel
         : s.provider === "anthropic"
           ? s.anthropicModel
-          : "mock";
+          : s.provider === "ollama"
+            ? s.ollamaModel
+            : "mock";
     if (paperId) {
       const ev = await useAtlas.getState().recordEvent({
         paperId,
@@ -816,13 +823,16 @@ function ProviderBadge() {
   const provider = useSettings((s) => s.provider);
   const openaiModel = useSettings((s) => s.openaiModel);
   const anthropicModel = useSettings((s) => s.anthropicModel);
+  const ollamaModel = useSettings((s) => s.ollamaModel);
   const venue = useSettings((s) => s.venue);
   const model =
     provider === "openai"
       ? openaiModel
       : provider === "anthropic"
         ? anthropicModel
-        : "mock";
+        : provider === "ollama"
+          ? ollamaModel
+          : "mock";
   return (
     <button
       onClick={() => toggleSettings(true)}

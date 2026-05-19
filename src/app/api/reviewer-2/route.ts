@@ -10,10 +10,11 @@ import {
   rubricForVenue,
   type VenueId,
 } from "@/lib/rubrics";
+import { ollamaChat } from "@/lib/ollama";
 
 export const runtime = "nodejs";
 
-type Provider = "openai" | "anthropic" | "mock";
+type Provider = "openai" | "anthropic" | "ollama" | "mock";
 
 interface PostBody {
   title: string;
@@ -35,11 +36,17 @@ export async function POST(req: NextRequest) {
     req.headers.get("x-openai-key") || process.env.OPENAI_API_KEY || "";
   const anthropicKey =
     req.headers.get("x-anthropic-key") || process.env.ANTHROPIC_API_KEY || "";
+  const ollamaUrl =
+    req.headers.get("x-ollama-url") ||
+    process.env.OLLAMA_URL ||
+    "http://localhost:11434";
   const model =
     req.headers.get("x-model") ||
     (provider === "anthropic"
       ? "claude-haiku-4-5-20251001"
-      : "gpt-4o-mini");
+      : provider === "ollama"
+        ? "llama3.2"
+        : "gpt-4o-mini");
 
   const baseline = deriveReviewer2Questions(venue, report);
 
@@ -67,6 +74,9 @@ export async function POST(req: NextRequest) {
         anthropicKey,
       );
       if (refined) refinedBy = `anthropic · ${model}`;
+    } else if (provider === "ollama") {
+      refined = await callOllama(venue, title, html, baseline, model, ollamaUrl);
+      if (refined) refinedBy = `ollama · ${model}`;
     }
   } catch {
     refined = undefined;
@@ -192,6 +202,31 @@ async function callAnthropic(
     content?: { type: string; text?: string }[];
   };
   return parseQuestions(data.content?.[0]?.text ?? "{}");
+}
+
+async function callOllama(
+  venue: VenueId,
+  title: string,
+  html: string,
+  baseline: Reviewer2Question[],
+  model: string,
+  url: string,
+): Promise<Reviewer2Question[] | undefined> {
+  try {
+    const text = await ollamaChat({
+      url,
+      model,
+      temperature: 0.3,
+      jsonMode: true,
+      messages: [
+        { role: "system", content: systemPrompt(venue) },
+        { role: "user", content: userPrompt(title, html, baseline) },
+      ],
+    });
+    return parseQuestions(text);
+  } catch {
+    return undefined;
+  }
 }
 
 function parseQuestions(raw: string): Reviewer2Question[] | undefined {
